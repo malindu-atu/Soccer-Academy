@@ -7,7 +7,9 @@ export const supabase = createClient(
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRkeXpucmFzemFud3h0cXNncmZmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ0ODcwNzAsImV4cCI6MjA5MDA2MzA3MH0.aGpCGR2u9RXWgWRuyg59ovDjbPBZxuIdA6dTat8mTD0"
 );
 
-const api = axios.create({ baseURL: "http://localhost:8000/api" });
+const api = axios.create({ 
+  baseURL: process.env.REACT_APP_API_URL || "http://localhost:8000/api" 
+});
 
 api.interceptors.request.use((config) => {
   const user = JSON.parse(localStorage.getItem("user"));
