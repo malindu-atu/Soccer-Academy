@@ -1,8 +1,9 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Query
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query, Request
 from pydantic import BaseModel
 from app.database import supabase
 from app.config import settings
 from typing import Optional
+from datetime import date
 import httpx
 import base64
 import json
@@ -16,6 +17,7 @@ class KidCreate(BaseModel):
     parent_name: Optional[str] = None
     parent_contact: Optional[str] = None
     enrollment_date: Optional[str] = None
+    location_id: Optional[str] = None
 
 class KidUpdate(BaseModel):
     name: Optional[str] = None
@@ -24,6 +26,7 @@ class KidUpdate(BaseModel):
     parent_name: Optional[str] = None
     parent_contact: Optional[str] = None
     enrollment_date: Optional[str] = None
+    location_id: Optional[str] = None
 
 class ExtractedStudentData(BaseModel):
     name: Optional[str] = None
@@ -35,16 +38,10 @@ class ExtractedStudentData(BaseModel):
 
 @router.get("/")
 def get_kids(age_group: Optional[str] = Query(None), location_id: Optional[str] = Query(None)):
+    query = supabase.table("kids").select("*, locations(id, name)").eq("is_active", True)
+
     if location_id:
-        enrollments = supabase.table("session_enrollments") \
-            .select("kid_id, session_templates!inner(location_id)") \
-            .eq("session_templates.location_id", location_id).execute()
-        kid_ids = list({e["kid_id"] for e in enrollments.data})
-        if not kid_ids:
-            return []
-        query = supabase.table("kids").select("*").eq("is_active", True).in_("id", kid_ids)
-    else:
-        query = supabase.table("kids").select("*").eq("is_active", True)
+        query = query.eq("location_id", location_id)
 
     if age_group:
         query = query.eq("age_group", age_group)
@@ -54,7 +51,7 @@ def get_kids(age_group: Optional[str] = Query(None), location_id: Optional[str] 
 
 @router.get("/age-group/{age_group}")
 def get_kids_by_age_group(age_group: str):
-    res = supabase.table("kids").select("*").eq("age_group", age_group).eq("is_active", True).execute()
+    res = supabase.table("kids").select("*, locations(id, name)").eq("age_group", age_group).eq("is_active", True).execute()
     return res.data
 
 @router.post("/extract-enrollment")
@@ -134,9 +131,6 @@ Rules:
 
 @router.post("/webhook/jotform")
 async def jotform_webhook(request: Request):
-    from fastapi import Request
-    from datetime import date
-
     form_data = await request.form()
     data = dict(form_data)
 
@@ -180,7 +174,7 @@ def create_kid(kid: KidCreate):
 
 @router.put("/{kid_id}")
 def update_kid(kid_id: str, kid: KidUpdate):
-    updates = {k: v for k, v in kid.dict().items() if v is not None}
+    updates = kid.dict(exclude_unset=True)
     res = supabase.table("kids").update(updates).eq("id", kid_id).execute()
     return res.data[0]
 
