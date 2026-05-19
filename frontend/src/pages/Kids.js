@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { UserPlus, ScanLine, ArrowLeft, Calendar, User, Phone, Users } from 'lucide-react';
+import { UserPlus, Trash2, Pencil, X, Check } from 'lucide-react';
 import { getKids, createKid } from "../api";
-import { pageWrapper, card, input, btnPrimary, btnOutline } from "../components/UI";
+import { pageWrapper, card, input, btnPrimary, btnOutline, btnDanger } from "../components/UI";
 import StudentFilter from "../components/StudentFilter";
 import axios from "axios";
 
@@ -12,14 +12,17 @@ const EMPTY_FORM = {
   parent_name: "", parent_contact: "", enrollment_date: ""
 };
 
-const api2 = axios.create({ baseURL: "http://localhost:8000/api" });
+const api2 = axios.create({ baseURL: process.env.REACT_APP_API_URL || "http://localhost:8000/api" });
 api2.interceptors.request.use(c => {
   const u = JSON.parse(localStorage.getItem("user"));
   if (u?.access_token) c.headers.Authorization = `Bearer ${u.access_token}`;
   return c;
 });
 const getLocations = () => api2.get("/locations");
+const updateKid    = (id, data) => api2.put(`/kids/${id}`, data);
+const deleteKid    = (id)       => api2.delete(`/kids/${id}`);
 
+// ── Enrollment scanner (unchanged) ────────────────────────────────────────
 function EnrollmentScanner({ onExtracted, onSkip }) {
   const [dragOver, setDragOver] = useState(false);
   const [preview, setPreview] = useState(null);
@@ -37,7 +40,7 @@ function EnrollmentScanner({ onExtracted, onSkip }) {
     try {
       const formData = new FormData();
       formData.append("file", file);
-      const res = await axios.post("http://localhost:8000/api/kids/extract-enrollment", formData, {
+      const res = await axios.post(`${process.env.REACT_APP_API_URL || "http://localhost:8000/api"}/kids/extract-enrollment`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       onExtracted(res.data);
@@ -50,7 +53,7 @@ function EnrollmentScanner({ onExtracted, onSkip }) {
     <div style={card} className="rounded-2xl p-6 mb-6">
       <div className="flex items-center gap-3 mb-5">
         <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
-          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg"></div>
+          className="w-10 h-10 rounded-xl flex items-center justify-center text-lg">📄</div>
         <div>
           <h2 className="font-semibold text-white text-base">Upload Enrollment Document</h2>
           <p className="text-gray-400 text-xs mt-0.5">AI will auto-fill student details from the document</p>
@@ -65,7 +68,7 @@ function EnrollmentScanner({ onExtracted, onSkip }) {
           <img src={preview} alt="preview" className="max-h-52 rounded-lg object-contain border border-white/10" />
         ) : (
           <>
-            <div style={{ color: "#00E5CC" }} className="text-4xl"></div>
+            <div style={{ color: "#00E5CC" }} className="text-4xl">📁</div>
             <p className="text-gray-300 text-sm font-medium">Drop document image here or click to browse</p>
             <p className="text-gray-500 text-xs">JPG, PNG, WEBP supported</p>
           </>
@@ -84,6 +87,92 @@ function EnrollmentScanner({ onExtracted, onSkip }) {
   );
 }
 
+// ── Edit modal ─────────────────────────────────────────────────────────────
+function EditModal({ kid, onSave, onClose }) {
+  const [form, setForm] = useState({
+    name: kid.name || "",
+    date_of_birth: kid.date_of_birth || "",
+    age_group: kid.age_group || "U6",
+    parent_name: kid.parent_name || "",
+    parent_contact: kid.parent_contact || "",
+    enrollment_date: kid.enrollment_date || "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(kid.id, form);
+    setSaving(false);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }} onClick={onClose}>
+      <div style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(0,229,204,0.25)", maxWidth: 520, width: "100%" }}
+        className="rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
+              className="w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm">
+              {kid.name.charAt(0)}
+            </div>
+            <div>
+              <p className="text-white font-semibold">Edit Student</p>
+              <p className="text-gray-400 text-xs">{kid.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Fields */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-5">
+          {[
+            { label: "Full Name *", key: "name", required: true },
+            { label: "Date of Birth", key: "date_of_birth", type: "date" },
+            { label: "Parent Name", key: "parent_name" },
+            { label: "Parent Contact", key: "parent_contact" },
+            { label: "Enrollment Date", key: "enrollment_date", type: "date" },
+          ].map(f => (
+            <div key={f.key}>
+              <label className="text-xs text-gray-400 mb-1.5 block">{f.label}</label>
+              <input style={input}
+                className="w-full rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500/30"
+                type={f.type || "text"} value={form[f.key]}
+                onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+                required={f.required} />
+            </div>
+          ))}
+          <div>
+            <label className="text-xs text-gray-400 mb-1.5 block">Age Group</label>
+            <select style={{ ...input, backgroundImage: "none" }}
+              className="w-full rounded-lg p-3 text-sm focus:outline-none"
+              value={form.age_group} onChange={e => setForm({ ...form, age_group: e.target.value })}>
+              {AGE_GROUPS.map(g => <option key={g} style={{ backgroundColor: "#0D1F3C" }}>{g}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="flex gap-3">
+          <button onClick={handleSave} disabled={saving} style={btnPrimary}
+            className="flex-1 py-2.5 rounded-lg font-semibold text-sm hover:opacity-90 transition-all flex items-center justify-center gap-2">
+            <Check size={14} /> {saving ? "Saving…" : "Save Changes"}
+          </button>
+          <button onClick={onClose}
+            style={{ border: "1px solid rgba(255,255,255,0.1)", color: "#9CA3AF" }}
+            className="px-5 py-2.5 rounded-lg text-sm hover:bg-white/5 transition-all">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────
 export default function Kids() {
   const [kids, setKids] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -93,6 +182,8 @@ export default function Kids() {
   const [search, setSearch] = useState("");
   const [ageFilter, setAgeFilter] = useState("");
   const [locationFilter, setLocationFilter] = useState("");
+  const [editKid, setEditKid] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState(null); // kid id pending delete
 
   const loadKids = (ag = ageFilter, loc = locationFilter) => {
     setLoading(true);
@@ -107,9 +198,8 @@ export default function Kids() {
     loadKids("", "");
   }, []);
 
-  const handleAgeFilter = (v) => { setAgeFilter(v); loadKids(v, locationFilter); };
+  const handleAgeFilter      = (v) => { setAgeFilter(v);      loadKids(v, locationFilter); };
   const handleLocationFilter = (v) => { setLocationFilter(v); loadKids(ageFilter, v); };
-  const handleClearSearch = (v) => { setSearch(v); };
 
   const handleExtracted = (data) => {
     setForm({ name: data.name || "", date_of_birth: data.date_of_birth || "", age_group: AGE_GROUPS.includes(data.age_group) ? data.age_group : "U6", parent_name: data.parent_name || "", parent_contact: data.parent_contact || "", enrollment_date: data.enrollment_date || "" });
@@ -122,6 +212,18 @@ export default function Kids() {
     loadKids();
     setForm(EMPTY_FORM);
     setStep(null);
+  };
+
+  const handleEdit = async (id, data) => {
+    await updateKid(id, data);
+    setEditKid(null);
+    loadKids();
+  };
+
+  const handleDelete = async (id) => {
+    await deleteKid(id);
+    setDeleteConfirm(null);
+    setKids(k => k.filter(x => x.id !== id));
   };
 
   const cancel = () => { setStep(null); setForm(EMPTY_FORM); };
@@ -192,7 +294,7 @@ export default function Kids() {
       <div style={card} className="rounded-2xl overflow-hidden">
         <div className="p-4 border-b border-white/5">
           <StudentFilter
-            search={search} onSearch={handleClearSearch}
+            search={search} onSearch={setSearch}
             ageFilter={ageFilter} onAge={handleAgeFilter}
             locationFilter={locationFilter} onLocation={handleLocationFilter}
             locations={locations}
@@ -200,6 +302,7 @@ export default function Kids() {
           />
         </div>
 
+        {/* Mobile list */}
         <div className="block sm:hidden">
           {loading && <p className="p-6 text-center text-gray-500 text-sm">Loading…</p>}
           {filteredKids.map(k => (
@@ -212,40 +315,115 @@ export default function Kids() {
                 </div>
                 <span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }} className="px-2 py-0.5 rounded-full text-xs flex-shrink-0">{k.age_group}</span>
               </div>
-              <div className="ml-12 grid grid-cols-2 gap-1 text-xs text-gray-400">
+              <div className="ml-12 grid grid-cols-2 gap-1 text-xs text-gray-400 mb-3">
                 <span>{k.parent_name || "—"}</span>
                 <span>{k.parent_contact || "—"}</span>
                 {k.enrollment_date && <span className="col-span-2">📅 {k.enrollment_date}</span>}
+              </div>
+              <div className="ml-12 flex gap-2">
+                <button onClick={() => setEditKid(k)}
+                  style={{ color: "#00E5CC", border: "1px solid rgba(0,229,204,0.25)" }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-cyan-500/10 transition-all">
+                  <Pencil size={11} /> Edit
+                </button>
+                <button onClick={() => setDeleteConfirm(k.id)}
+                  style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.25)" }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-500/10 transition-all">
+                  <Trash2 size={11} /> Delete
+                </button>
               </div>
             </div>
           ))}
           {!loading && filteredKids.length === 0 && <p className="p-8 text-center text-gray-500 text-sm">No students found.</p>}
         </div>
 
+        {/* Desktop table */}
         <div className="hidden sm:block overflow-x-auto">
           <table className="w-full">
             <thead style={{ backgroundColor: "#0A1628" }}>
-              <tr>{["Name","Age Group","Date of Birth","Enrolled","Parent","Contact"].map(h => (
+              <tr>{["Name","Age Group","Date of Birth","Enrolled","Parent","Contact","Actions"].map(h => (
                 <th key={h} className="p-4 text-left text-xs font-semibold text-gray-400 uppercase tracking-wider">{h}</th>
               ))}</tr>
             </thead>
             <tbody>
-              {loading && <tr><td colSpan={6} className="p-8 text-center text-gray-500">Loading…</td></tr>}
+              {loading && <tr><td colSpan={7} className="p-8 text-center text-gray-500">Loading…</td></tr>}
               {filteredKids.map(k => (
-                <tr key={k.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} className="hover:bg-white/2 transition-colors">
-                  <td className="p-4"><div className="flex items-center gap-3"><div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }} className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">{k.name.charAt(0)}</div><span className="text-white font-medium">{k.name}</span></div></td>
+                <tr key={k.id} style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }} className="hover:bg-white/2 transition-colors group">
+                  <td className="p-4">
+                    <div className="flex items-center gap-3">
+                      <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }} className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold">{k.name.charAt(0)}</div>
+                      <span className="text-white font-medium">{k.name}</span>
+                    </div>
+                  </td>
                   <td className="p-4"><span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }} className="px-2 py-0.5 rounded-full text-xs">{k.age_group}</span></td>
                   <td className="p-4 text-gray-400 text-sm">{k.date_of_birth || "—"}</td>
                   <td className="p-4 text-gray-400 text-sm">{k.enrollment_date || "—"}</td>
                   <td className="p-4 text-gray-400 text-sm">{k.parent_name || "—"}</td>
                   <td className="p-4 text-gray-400 text-sm">{k.parent_contact || "—"}</td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all">
+                      <button onClick={() => setEditKid(k)}
+                        style={{ color: "#00E5CC", border: "1px solid rgba(0,229,204,0.25)" }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-cyan-500/10 transition-all">
+                        <Pencil size={11} /> Edit
+                      </button>
+                      <button onClick={() => setDeleteConfirm(k.id)}
+                        style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.25)" }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-red-500/10 transition-all">
+                        <Trash2 size={11} /> Delete
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
-              {!loading && filteredKids.length === 0 && <tr><td colSpan={6} className="p-8 text-center text-gray-500">No students found.</td></tr>}
+              {!loading && filteredKids.length === 0 && <tr><td colSpan={7} className="p-8 text-center text-gray-500">No students found.</td></tr>}
             </tbody>
           </table>
         </div>
       </div>
+
+      {/* Edit modal */}
+      {editKid && (
+        <EditModal kid={editKid} onSave={handleEdit} onClose={() => setEditKid(null)} />
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteConfirm && (() => {
+        const kid = kids.find(k => k.id === deleteConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            style={{ backgroundColor: "rgba(0,0,0,0.75)" }} onClick={() => setDeleteConfirm(null)}>
+            <div style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(248,113,113,0.3)", maxWidth: 380, width: "100%" }}
+              className="rounded-2xl p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-3 mb-4">
+                <div style={{ backgroundColor: "rgba(248,113,113,0.15)", color: "#F87171" }}
+                  className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <p className="text-white font-semibold">Delete Student</p>
+                  <p className="text-gray-400 text-xs">This cannot be undone</p>
+                </div>
+              </div>
+              <p className="text-gray-300 text-sm mb-5">
+                Are you sure you want to remove <span className="text-white font-semibold">{kid?.name}</span> from the academy? Their attendance records will also be affected.
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => handleDelete(deleteConfirm)}
+                  style={{ backgroundColor: "rgba(248,113,113,0.15)", color: "#F87171", border: "1px solid rgba(248,113,113,0.3)" }}
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm hover:bg-red-500/25 transition-all">
+                  Yes, Delete
+                </button>
+                <button onClick={() => setDeleteConfirm(null)}
+                  style={{ border: "1px solid rgba(255,255,255,0.1)", color: "#9CA3AF" }}
+                  className="px-5 py-2.5 rounded-lg text-sm hover:bg-white/5 transition-all">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

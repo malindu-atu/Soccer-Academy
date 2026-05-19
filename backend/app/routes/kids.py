@@ -17,6 +17,14 @@ class KidCreate(BaseModel):
     parent_contact: Optional[str] = None
     enrollment_date: Optional[str] = None
 
+class KidUpdate(BaseModel):
+    name: Optional[str] = None
+    date_of_birth: Optional[str] = None
+    age_group: Optional[str] = None
+    parent_name: Optional[str] = None
+    parent_contact: Optional[str] = None
+    enrollment_date: Optional[str] = None
+
 class ExtractedStudentData(BaseModel):
     name: Optional[str] = None
     date_of_birth: Optional[str] = None
@@ -28,7 +36,6 @@ class ExtractedStudentData(BaseModel):
 @router.get("/")
 def get_kids(age_group: Optional[str] = Query(None), location_id: Optional[str] = Query(None)):
     if location_id:
-        # Get kid IDs enrolled in any session template at this location
         enrollments = supabase.table("session_enrollments") \
             .select("kid_id, session_templates!inner(location_id)") \
             .eq("session_templates.location_id", location_id).execute()
@@ -125,17 +132,59 @@ Rules:
 
     return ExtractedStudentData(**extracted)
 
+@router.post("/webhook/jotform")
+async def jotform_webhook(request: Request):
+    from fastapi import Request
+    from datetime import date
+
+    form_data = await request.form()
+    data = dict(form_data)
+
+    def map_age_group(raw: str) -> str:
+        raw = raw.upper().replace(" ", "")
+        mapping = {
+            "U6": "U6", "UNDER6": "U6",
+            "U7": "U7", "UNDER7": "U7",
+            "U8": "U8", "UNDER8": "U8",
+            "U9": "U9", "UNDER9": "U9",
+            "U10": "U10", "UNDER10": "U10",
+            "U11": "U11", "UNDER11": "U11",
+            "U12": "U12", "UNDER12": "U12",
+            "U13": "U13", "UNDER13": "U13",
+            "U14": "U14", "UNDER14": "U14",
+            "U15": "U15", "UNDER15": "U15",
+            "U16": "U16", "UNDER16": "U16",
+        }
+        return mapping.get(raw, "U6")
+
+    kid = {
+        "name": data.get("q3_fullName") or data.get("q3_fullname", ""),
+        "date_of_birth": data.get("q4_dateOf") or data.get("q4_dateofBirth") or None,
+        "parent_name": data.get("q5_parentName") or data.get("q5_parentname") or None,
+        "parent_contact": data.get("q6_phone") or data.get("q6_parentContact") or None,
+        "age_group": map_age_group(data.get("q7_ageGroup") or data.get("q7_agegroup") or ""),
+        "enrollment_date": date.today().isoformat(),
+        "is_active": True,
+    }
+
+    if not kid["name"]:
+        return {"status": "ignored", "reason": "no name found"}
+
+    supabase.table("kids").insert(kid).execute()
+    return {"status": "ok"}
+
 @router.post("/")
 def create_kid(kid: KidCreate):
     res = supabase.table("kids").insert(kid.dict()).execute()
     return res.data[0]
 
 @router.put("/{kid_id}")
-def update_kid(kid_id: str, kid: KidCreate):
-    res = supabase.table("kids").update(kid.dict()).eq("id", kid_id).execute()
+def update_kid(kid_id: str, kid: KidUpdate):
+    updates = {k: v for k, v in kid.dict().items() if v is not None}
+    res = supabase.table("kids").update(updates).eq("id", kid_id).execute()
     return res.data[0]
 
 @router.delete("/{kid_id}")
 def delete_kid(kid_id: str):
     supabase.table("kids").update({"is_active": False}).eq("id", kid_id).execute()
-    return {"message": "Kid deactivated"}
+    return {"message": "Student deactivated"}
