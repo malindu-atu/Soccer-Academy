@@ -1,29 +1,52 @@
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.database import supabase
+from app.config import settings
+from supabase import create_client
 import jwt
 from typing import Optional
 
 router = APIRouter()
 
+# Service role client needed for admin user operations
+service_supabase = create_client(settings.SUPABASE_URL, settings.SUPABASE_SERVICE_KEY) if settings.SUPABASE_SERVICE_KEY else None
+
 class MeRequest(BaseModel):
     access_token: str
 
 class CreateUserRequest(BaseModel):
-    access_token: str        # admin's JWT for auth check
+    access_token: str
     email: str
     password: str
     first_name: str
     last_name: str
-    role: str                # "admin" or "coach"
-    coach_id: Optional[str] = None  # link to coaches table if role=coach
+    role: str
+    coach_id: Optional[str] = None
+
+class DeleteUserRequest(BaseModel):
+    access_token: str
+    user_id: str
+
+def _verify_admin(access_token: str) -> str:
+    """Decode token, verify role=admin, return requester user_id."""
+    try:
+        payload = jwt.decode(access_token, options={"verify_signature": False})
+        requester_id = payload.get("sub")
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    profile_res = supabase.table("profiles").select("role").eq("id", requester_id).execute()
+    if not profile_res.data or profile_res.data[0]["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Admins only")
+
+    return requester_id
 
 @router.post("/me")
 def get_me(req: MeRequest):
     try:
         payload = jwt.decode(req.access_token, options={"verify_signature": False})
         user_id = payload.get("sub")
-        email = payload.get("email")
+        email   = payload.get("email")
         if not user_id or not email:
             raise HTTPException(status_code=401, detail="Invalid token")
     except Exception:
@@ -34,7 +57,7 @@ def get_me(req: MeRequest):
         raise HTTPException(status_code=403, detail="No profile found. Contact admin.")
 
     profile = profile_res.data[0]
-    role = profile.get("role")
+    role    = profile.get("role")
 
     if role == "admin":
         return {"role": "admin", "email": email, "profile": profile}
@@ -51,22 +74,11 @@ def get_me(req: MeRequest):
 
 @router.post("/create-user")
 def create_user(req: CreateUserRequest):
-    # 1. Verify requester is an admin
-    try:
-        payload = jwt.decode(req.access_token, options={"verify_signature": False})
-        requester_id = payload.get("sub")
-    except Exception:
-        raise HTTPException(status_code=401, detail="Invalid token")
+    _verify_admin(req.access_token)
 
-    profile_res = supabase.table("profiles").select("role").eq("id", requester_id).execute()
-    if not profile_res.data or profile_res.data[0]["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admins only")
-
-    # 2. Validate role
     if req.role not in ("admin", "coach"):
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'coach'")
 
-    # 3. Create auth user — trigger auto-creates the profile row
     try:
         user = supabase.auth.admin.create_user({
             "email": req.email,
@@ -74,15 +86,14 @@ def create_user(req: CreateUserRequest):
             "email_confirm": True,
             "user_metadata": {
                 "first_name": req.first_name,
-                "last_name": req.last_name,
-                "role": req.role,
+                "last_name":  req.last_name,
+                "role":       req.role,
             }
         })
         new_user_id = user.user.id
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # 4. If coach_id provided, link profile to coaches table
     if req.coach_id:
         supabase.table("profiles").update({
             "coach_id": req.coach_id
@@ -91,6 +102,51 @@ def create_user(req: CreateUserRequest):
     return {
         "message": "User created successfully",
         "user_id": new_user_id,
-        "email": req.email,
-        "role": req.role
+        "email":   req.email,
+        "role":    req.role,
     }
+
+
+@router.get("/users")
+def list_users(access_token: str):
+    """Return all profiles with their auth email joined."""
+    _verify_admin(access_token)
+
+    profiles_res = supabase.table("profiles").select("*, coaches(id, name, email)").execute()
+    profiles     = profiles_res.data
+
+    # Pull auth user list for emails (requires service role)
+    email_map = {}
+    if service_supabase:
+        try:
+            auth_users = service_supabase.auth.admin.list_users()
+            for u in auth_users:
+                email_map[u.id] = u.email
+        except Exception:
+            pass
+
+    for p in profiles:
+        p["email"] = email_map.get(p["id"], "—")
+
+    return profiles
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: str, req: DeleteUserRequest):
+    """Delete a user's auth account and profile."""
+    requester_id = _verify_admin(req.access_token)
+
+    if user_id == requester_id:
+        raise HTTPException(status_code=400, detail="You cannot delete your own account")
+
+    # Delete profile first (cascades handled by FK if set, otherwise manual)
+    supabase.table("profiles").delete().eq("id", user_id).execute()
+
+    # Delete from Supabase Auth
+    if service_supabase:
+        try:
+            service_supabase.auth.admin.delete_user(user_id)
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Auth deletion failed: {str(e)}")
+
+    return {"message": "User deleted"}
