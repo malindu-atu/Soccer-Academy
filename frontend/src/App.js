@@ -12,6 +12,7 @@ import CoachPortal from "./pages/CoachPortal";
 import Navbar from "./components/Navbar";
 import CalendarPage from "./pages/Calendar";
 import Users from "./pages/Users";
+import Finance from "./pages/Finance";
 
 function PrivateRoute({ children, role }) {
   const { user } = useAuth();
@@ -45,9 +46,7 @@ function AppRoutes() {
         <Route path="/analytics" element={
           <PrivateRoute><Analytics /></PrivateRoute>
         } />
-        <Route path="/payments" element={
-          <PrivateRoute role="admin"><Payments /></PrivateRoute>
-        } />
+        <Route path="/finance" element={<PrivateRoute role="admin"><Finance /></PrivateRoute>} />
         <Route path="/coach-portal" element={
           <PrivateRoute role="coach"><CoachPortal /></PrivateRoute>
         } />

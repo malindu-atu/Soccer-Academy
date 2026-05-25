@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Users, CalendarDays, GraduationCap,
-  ClipboardCheck, CreditCard, BarChart3, LogOut, UserCog, Calendar
+  ClipboardCheck, CreditCard, BarChart3, LogOut, UserCog, Calendar, DollarSign
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -11,7 +11,7 @@ const NAV_ITEMS = [
   { to: "/sessions",  label: "Sessions",  icon: CalendarDays    },
   { to: "/kids",      label: "Students",  icon: GraduationCap   },
   { to: "/attendance",label: "Attendance",icon: ClipboardCheck  },
-  { to: "/payments",  label: "Payments",  icon: CreditCard      },
+  { to: "/finance", label: "Finance", icon: DollarSign },
   { to: "/analytics", label: "Analytics", icon: BarChart3       },
   { to: "/calendar",  label: "Calendar",  icon: Calendar        },
   { to: "/users",     label: "Users",     icon: UserCog         },
