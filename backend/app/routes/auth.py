@@ -79,8 +79,14 @@ def create_user(req: CreateUserRequest):
     if req.role not in ("admin", "coach"):
         raise HTTPException(status_code=400, detail="Role must be 'admin' or 'coach'")
 
+    if not service_supabase:
+        raise HTTPException(
+            status_code=500,
+            detail="Service key not configured. Add SUPABASE_SERVICE_KEY to environment variables."
+        )
+
     try:
-        user = supabase.auth.admin.create_user({
+        user = service_supabase.auth.admin.create_user({
             "email": req.email,
             "password": req.password,
             "email_confirm": True,
@@ -115,7 +121,6 @@ def list_users(access_token: str):
     profiles_res = supabase.table("profiles").select("*, coaches(id, name, email)").execute()
     profiles     = profiles_res.data
 
-    # Pull auth user list for emails (requires service role)
     email_map = {}
     if service_supabase:
         try:
@@ -139,10 +144,8 @@ def delete_user(user_id: str, req: DeleteUserRequest):
     if user_id == requester_id:
         raise HTTPException(status_code=400, detail="You cannot delete your own account")
 
-    # Delete profile first (cascades handled by FK if set, otherwise manual)
     supabase.table("profiles").delete().eq("id", user_id).execute()
 
-    # Delete from Supabase Auth
     if service_supabase:
         try:
             service_supabase.auth.admin.delete_user(user_id)
