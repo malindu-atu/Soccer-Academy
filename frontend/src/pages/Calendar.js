@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import {
-  ChevronLeft, ChevronRight, Plus, X, Check, Clock,
-  Users, GraduationCap, Trash2, Edit3, Calendar
+  ChevronLeft, ChevronRight, Check, Clock,
+  Users, GraduationCap, Trash2, Edit3, Calendar, Plus, X
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { getCoaches, getKids } from "../api";
@@ -15,19 +15,19 @@ api.interceptors.request.use(c => {
   return c;
 });
 
-const getEvents   = (month) => api.get(`/events${month ? `?month=${month}` : ""}`);
-const createEvent = (data)  => api.post("/events", data);
+const getEvents   = (month) => api.get(`/events/?month=${month}`);
+const createEvent = (data)  => api.post("/events/", data);
 const updateEvent = (id, d) => api.put(`/events/${id}`, d);
 const deleteEvent = (id)    => api.delete(`/events/${id}`);
 
-const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAYS   = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["January","February","March","April","May","June",
                 "July","August","September","October","November","December"];
 
 const STATUS_CFG = {
-  pending:   { color: "#FCD34D", bg: "rgba(251,191,36,0.15)",  label: "Pending",   icon: Clock },
-  completed: { color: "#00E5CC", bg: "rgba(0,229,204,0.15)",   label: "Completed", icon: Check },
-  cancelled: { color: "#F87171", bg: "rgba(239,68,68,0.15)",   label: "Cancelled", icon: X     },
+  pending:   { color: "#FCD34D", bg: "rgba(251,191,36,0.15)",  label: "Pending",   icon: Clock  },
+  completed: { color: "#00E5CC", bg: "rgba(0,229,204,0.15)",   label: "Completed", icon: Check  },
+  cancelled: { color: "#F87171", bg: "rgba(239,68,68,0.15)",   label: "Cancelled", icon: X      },
 };
 
 function toMonthStr(y, m) {
@@ -42,7 +42,6 @@ function getFirstDayOfWeek(year, month) {
   return new Date(year, month, 1).getDay();
 }
 
-// ── Event dot ───────────────────────────────────────────────────────────────
 function EventDot({ event, onClick }) {
   const cfg = STATUS_CFG[event.status] || STATUS_CFG.pending;
   return (
@@ -56,31 +55,37 @@ function EventDot({ event, onClick }) {
   );
 }
 
-// ── Event Modal (create / edit) ─────────────────────────────────────────────
 function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
   const isNew = !event;
   const [form, setForm] = useState({
-    title: event?.title || "",
+    title:       event?.title       || "",
     description: event?.description || "",
-    date: event?.date || date || "",
-    status: event?.status || "pending",
-    coach_ids: event?.coaches?.map(c => c.id) || [],
-    kid_ids: event?.kids?.map(k => k.id) || [],
+    date:        event?.date        || date || "",
+    status:      event?.status      || "pending",
+    coach_ids:   event?.coaches?.map(c => c.id) || [],
+    kid_ids:     event?.kids?.map(k => k.id)    || [],
   });
   const [saving, setSaving] = useState(false);
-  const [tab, setTab] = useState("details"); // details | coaches | students
+  const [tab, setTab]       = useState("details");
 
   const toggleCoach = (id) => setForm(f => ({
-    ...f, coach_ids: f.coach_ids.includes(id) ? f.coach_ids.filter(x => x !== id) : [...f.coach_ids, id]
+    ...f, coach_ids: f.coach_ids.includes(id)
+      ? f.coach_ids.filter(x => x !== id)
+      : [...f.coach_ids, id]
   }));
+
   const toggleKid = (id) => setForm(f => ({
-    ...f, kid_ids: f.kid_ids.includes(id) ? f.kid_ids.filter(x => x !== id) : [...f.kid_ids, id]
+    ...f, kid_ids: f.kid_ids.includes(id)
+      ? f.kid_ids.filter(x => x !== id)
+      : [...f.kid_ids, id]
   }));
 
   const handleSave = async () => {
     if (!form.title.trim() || !form.date) return;
     setSaving(true);
-    await onSave(form, event?.id);
+    try {
+      await onSave(form, event?.id);
+    } catch (e) { console.error(e); }
     setSaving(false);
   };
 
@@ -93,7 +98,8 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
-        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }} className="p-5 flex items-center justify-between">
+        <div style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
+          className="p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
               className="w-9 h-9 rounded-xl flex items-center justify-center">
@@ -104,7 +110,9 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
               <p className="text-gray-500 text-xs">{form.date}</p>
             </div>
           </div>
-          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors"><X size={18} /></button>
+          <button onClick={onClose} className="text-gray-500 hover:text-white transition-colors">
+            <X size={18} />
+          </button>
         </div>
 
         {/* Tabs */}
@@ -127,7 +135,6 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
 
         {/* Body */}
         <div className="p-5 overflow-y-auto flex-1">
-
           {tab === "details" && (
             <div className="space-y-4">
               <div>
@@ -156,7 +163,8 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
                   {Object.entries(STATUS_CFG).map(([key, cfg]) => {
                     const Icon = cfg.icon;
                     return (
-                      <button key={key} type="button" onClick={() => setForm(f => ({ ...f, status: key }))}
+                      <button key={key} type="button"
+                        onClick={() => setForm(f => ({ ...f, status: key }))}
                         style={form.status === key
                           ? { backgroundColor: cfg.color, color: "#0A1628" }
                           : { backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40` }}
@@ -187,7 +195,7 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
                           ? { backgroundColor: "#00E5CC", color: "#0A1628" }
                           : { backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
                         className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                        {sel ? "✓" : c.name.charAt(0)}
+                        {sel ? <Check size={14} /> : c.name.charAt(0)}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-white text-sm font-medium">{c.name}</p>
@@ -217,7 +225,7 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
                           ? { backgroundColor: "#00E5CC", color: "#0A1628" }
                           : { backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
                         className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
-                        {sel ? "✓" : k.name.charAt(0)}
+                        {sel ? <Check size={12} /> : k.name.charAt(0)}
                       </div>
                       <span className="text-white text-sm flex-1">{k.name}</span>
                       <span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }}
@@ -234,7 +242,7 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
         <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
           className="p-4 flex items-center justify-between gap-3">
           <div>
-            {!isNew && (
+            {!isNew && onDelete && (
               <button onClick={() => onDelete(event.id)}
                 style={{ color: "#F87171", border: "1px solid rgba(248,113,113,0.25)" }}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs hover:bg-red-500/10 transition-all">
@@ -250,7 +258,7 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
             </button>
             <button onClick={handleSave} disabled={saving || !form.title.trim()} style={btnPrimary}
               className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-all">
-              <Check size={14} /> {saving ? "Saving…" : isNew ? "Create Event" : "Save Changes"}
+              <Check size={14} /> {saving ? "Saving..." : isNew ? "Create Event" : "Save Changes"}
             </button>
           </div>
         </div>
@@ -259,9 +267,8 @@ function EventModal({ event, date, coaches, kids, onSave, onDelete, onClose }) {
   );
 }
 
-// ── Event detail popover (read-only for coaches) ────────────────────────────
 function EventDetail({ event, onEdit, onClose, isAdmin }) {
-  const cfg = STATUS_CFG[event.status] || STATUS_CFG.pending;
+  const cfg  = STATUS_CFG[event.status] || STATUS_CFG.pending;
   const Icon = cfg.icon;
 
   return (
@@ -327,23 +334,21 @@ function EventDetail({ event, onEdit, onClose, isAdmin }) {
   );
 }
 
-// ── Main Calendar page ──────────────────────────────────────────────────────
 export default function CalendarPage() {
-  const { user } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const { user }  = useAuth();
+  const isAdmin   = user?.role === "admin";
 
   const today = new Date();
-  const [year, setYear]     = useState(today.getFullYear());
-  const [month, setMonth]   = useState(today.getMonth());
-  const [events, setEvents] = useState([]);
+  const [year, setYear]   = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth());
+  const [events, setEvents]   = useState([]);
   const [coaches, setCoaches] = useState([]);
-  const [kids, setKids]     = useState([]);
+  const [kids, setKids]       = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal state
-  const [createModal, setCreateModal] = useState(null); // { date }
-  const [editModal, setEditModal]     = useState(null); // event obj
-  const [detailModal, setDetailModal] = useState(null); // event obj
+  const [createModal, setCreateModal] = useState(null);
+  const [editModal, setEditModal]     = useState(null);
+  const [detailModal, setDetailModal] = useState(null);
 
   const monthStr = toMonthStr(year, month);
 
@@ -351,18 +356,19 @@ export default function CalendarPage() {
     setLoading(true);
     try {
       const res = await getEvents(monthStr);
-      setEvents(res.data);
-    } catch (e) { console.error(e); }
+      setEvents(res.data || []);
+    } catch (e) {
+      console.error("Failed to load events:", e);
+      setEvents([]);
+    }
     setLoading(false);
   }, [monthStr]);
 
-  useEffect(() => {
-    loadEvents();
-  }, [loadEvents]);
+  useEffect(() => { loadEvents(); }, [loadEvents]);
 
   useEffect(() => {
-    getCoaches().then(r => setCoaches(r.data)).catch(() => {});
-    getKids().then(r => setKids(r.data)).catch(() => {});
+    getCoaches().then(r => setCoaches(r.data || [])).catch(() => {});
+    getKids().then(r => setKids(r.data || [])).catch(() => {});
   }, []);
 
   const prevMonth = () => {
@@ -389,22 +395,29 @@ export default function CalendarPage() {
       setCreateModal(null);
       setEditModal(null);
       setDetailModal(null);
-      loadEvents();
-    } catch (e) { console.error(e); }
+      // Reload events after save
+      await loadEvents();
+    } catch (e) {
+      console.error("Failed to save event:", e);
+    }
   };
 
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this event?")) return;
-    await deleteEvent(id);
-    setDetailModal(null);
-    setEditModal(null);
-    loadEvents();
+    try {
+      await deleteEvent(id);
+      setDetailModal(null);
+      setEditModal(null);
+      await loadEvents();
+    } catch (e) {
+      console.error("Failed to delete event:", e);
+    }
   };
 
   // Build calendar grid
-  const daysInMonth  = getDaysInMonth(year, month);
-  const firstDayOfWk = getFirstDayOfWeek(year, month);
-  const totalCells   = Math.ceil((firstDayOfWk + daysInMonth) / 7) * 7;
+  const daysInMonth   = getDaysInMonth(year, month);
+  const firstDayOfWk  = getFirstDayOfWeek(year, month);
+  const totalCells    = Math.ceil((firstDayOfWk + daysInMonth) / 7) * 7;
 
   // Map events by date string
   const eventsByDate = {};
@@ -421,15 +434,11 @@ export default function CalendarPage() {
       {/* Header */}
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Session Plan
-          </h1>
+          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">Session Plan</h1>
           <p className="text-gray-500 mt-1 text-sm">
             {isAdmin ? "Click any day to add an event" : "View scheduled events and sessions"}
           </p>
         </div>
-
-        {/* Month navigator */}
         <div className="flex items-center gap-3">
           <button onClick={prevMonth}
             style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(0,229,204,0.2)", color: "#00E5CC" }}
@@ -459,9 +468,7 @@ export default function CalendarPage() {
             </div>
           );
         })}
-        {isAdmin && (
-          <span className="text-gray-600 text-xs ml-2">· Click any day to add event</span>
-        )}
+        {isAdmin && <span className="text-gray-600 text-xs ml-2">· Click any day to add an event</span>}
       </div>
 
       {/* Calendar grid */}
@@ -479,65 +486,71 @@ export default function CalendarPage() {
         </div>
 
         {/* Cells */}
-        <div className="grid grid-cols-7">
-          {Array.from({ length: totalCells }).map((_, i) => {
-            const dayNum  = i - firstDayOfWk + 1;
-            const isValid = dayNum >= 1 && dayNum <= daysInMonth;
-            const dateStr = isValid
-              ? `${year}-${String(month+1).padStart(2,"0")}-${String(dayNum).padStart(2,"0")}`
-              : null;
-            const isToday   = dateStr === todayStr;
-            const isWeekend = i % 7 === 0 || i % 7 === 6;
-            const dayEvents = dateStr ? (eventsByDate[dateStr] || []) : [];
+        {loading ? (
+          <div className="flex items-center justify-center py-20 text-gray-500 text-sm gap-2">
+            <div style={{ borderColor: "#00E5CC" }} className="animate-spin rounded-full h-5 w-5 border-b-2" />
+            Loading events...
+          </div>
+        ) : (
+          <div className="grid grid-cols-7">
+            {Array.from({ length: totalCells }).map((_, i) => {
+              const dayNum  = i - firstDayOfWk + 1;
+              const isValid = dayNum >= 1 && dayNum <= daysInMonth;
+              const dateStr = isValid
+                ? `${year}-${String(month+1).padStart(2,"0")}-${String(dayNum).padStart(2,"0")}`
+                : null;
+              const isToday   = dateStr === todayStr;
+              const isWeekend = i % 7 === 0 || i % 7 === 6;
+              const dayEvents = dateStr ? (eventsByDate[dateStr] || []) : [];
 
-            return (
-              <div
-                key={i}
-                onClick={() => isValid && handleDayClick(dateStr)}
-                style={{
-                  borderTop: "1px solid rgba(255,255,255,0.05)",
-                  borderRight: i % 7 !== 6 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                  backgroundColor: !isValid ? "rgba(0,0,0,0.2)"
-                    : isWeekend ? "rgba(0,229,204,0.02)"
-                    : "transparent",
-                  cursor: isValid && isAdmin ? "pointer" : "default",
-                  minHeight: 100,
-                }}
-                className={`p-2 relative transition-colors ${isValid && isAdmin ? "hover:bg-white/2" : ""}`}
-              >
-                {isValid && (
-                  <>
-                    {/* Day number */}
-                    <div className="flex items-center justify-between mb-1">
-                      <span
-                        style={isToday
-                          ? { backgroundColor: "#00E5CC", color: "#080F1E", width: 24, height: 24,
-                              borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                              fontSize: 11, fontWeight: 700 }
-                          : { color: isWeekend ? "#00E5CC" : "#9CA3AF", fontSize: 12, fontWeight: isToday ? 700 : 500 }}
-                      >
-                        {dayNum}
-                      </span>
-                      {isAdmin && dayEvents.length === 0 && (
-                        <Plus size={11} className="text-gray-700 opacity-0 group-hover:opacity-100" />
-                      )}
-                    </div>
-
-                    {/* Events */}
-                    <div className="space-y-0.5">
-                      {dayEvents.slice(0, 3).map(ev => (
-                        <EventDot key={ev.id} event={ev} onClick={setDetailModal} />
-                      ))}
-                      {dayEvents.length > 3 && (
-                        <p className="text-gray-600 text-xs pl-1">+{dayEvents.length - 3} more</p>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
+              return (
+                <div
+                  key={i}
+                  onClick={() => isValid && handleDayClick(dateStr)}
+                  style={{
+                    borderTop:   "1px solid rgba(255,255,255,0.05)",
+                    borderRight: i % 7 !== 6 ? "1px solid rgba(255,255,255,0.05)" : "none",
+                    backgroundColor: !isValid
+                      ? "rgba(0,0,0,0.2)"
+                      : isWeekend
+                      ? "rgba(0,229,204,0.02)"
+                      : "transparent",
+                    cursor:    isValid && isAdmin ? "pointer" : "default",
+                    minHeight: 100,
+                  }}
+                  className={`p-2 relative transition-colors ${isValid && isAdmin ? "hover:bg-white/2" : ""}`}
+                >
+                  {isValid && (
+                    <>
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          style={isToday
+                            ? { backgroundColor: "#00E5CC", color: "#080F1E", width: 24, height: 24,
+                                borderRadius: "50%", display: "flex", alignItems: "center",
+                                justifyContent: "center", fontSize: 11, fontWeight: 700 }
+                            : { color: isWeekend ? "#00E5CC" : "#9CA3AF", fontSize: 12, fontWeight: 500 }}
+                        >
+                          {dayNum}
+                        </span>
+                        {isAdmin && dayEvents.length === 0 && (
+                          <Plus size={10} className="text-gray-700" />
+                        )}
+                      </div>
+                      <div className="space-y-0.5">
+                        {dayEvents.slice(0, 3).map(ev => (
+                          <EventDot key={ev.id} event={ev} onClick={setDetailModal} />
+                        ))}
+                        {dayEvents.length > 3 && (
+                          <p className="text-gray-600 text-xs pl-1">+{dayEvents.length - 3} more</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Summary strip */}
@@ -547,7 +560,8 @@ export default function CalendarPage() {
             const count = events.filter(e => e.status === key).length;
             const Icon  = cfg.icon;
             return (
-              <div key={key} style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(255,255,255,0.07)" }}
+              <div key={key}
+                style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(255,255,255,0.07)" }}
                 className="rounded-xl p-3 flex items-center gap-3">
                 <div style={{ backgroundColor: cfg.bg, color: cfg.color }}
                   className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0">
