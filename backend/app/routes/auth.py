@@ -29,7 +29,6 @@ class DeleteUserRequest(BaseModel):
     user_id: str
 
 def _verify_admin(access_token: str) -> str:
-    """Decode token, verify role=admin, return requester user_id."""
     try:
         payload = jwt.decode(access_token, options={"verify_signature": False})
         requester_id = payload.get("sub")
@@ -101,22 +100,19 @@ def create_user(req: CreateUserRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-    # Retry updating the profile since the Supabase trigger
-    # that creates the profile row runs asynchronously
-    updates = {
+    # Wait 1 second for Supabase trigger to create the profile row,
+    # then upsert — updates if trigger created it, inserts if not
+    time.sleep(1)
+    profile_data = {
+        "id":         new_user_id,
         "first_name": req.first_name,
         "last_name":  req.last_name,
         "role":       req.role,
     }
     if req.coach_id:
-        updates["coach_id"] = req.coach_id
+        profile_data["coach_id"] = req.coach_id
 
-    for attempt in range(5):
-        time.sleep(0.5)
-        profile_check = supabase.table("profiles").select("id").eq("id", new_user_id).execute()
-        if profile_check.data:
-            supabase.table("profiles").update(updates).eq("id", new_user_id).execute()
-            break
+    supabase.table("profiles").upsert(profile_data, on_conflict="id").execute()
 
     return {
         "message": "User created successfully",
@@ -128,7 +124,6 @@ def create_user(req: CreateUserRequest):
 
 @router.get("/users")
 def list_users(access_token: str):
-    """Return all profiles with their auth email joined."""
     _verify_admin(access_token)
 
     profiles_res = supabase.table("profiles").select("*, coaches(id, name, email)").execute()
@@ -151,7 +146,6 @@ def list_users(access_token: str):
 
 @router.delete("/users/{user_id}")
 def delete_user(user_id: str, req: DeleteUserRequest):
-    """Delete a user's auth account and profile."""
     requester_id = _verify_admin(req.access_token)
 
     if user_id == requester_id:
