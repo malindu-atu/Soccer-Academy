@@ -4,6 +4,7 @@ from app.database import supabase
 from app.config import settings
 from supabase import create_client
 import jwt
+import time
 from typing import Optional
 
 router = APIRouter()
@@ -100,10 +101,22 @@ def create_user(req: CreateUserRequest):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Retry updating the profile since the Supabase trigger
+    # that creates the profile row runs asynchronously
+    updates = {
+        "first_name": req.first_name,
+        "last_name":  req.last_name,
+        "role":       req.role,
+    }
     if req.coach_id:
-        supabase.table("profiles").update({
-            "coach_id": req.coach_id
-        }).eq("id", new_user_id).execute()
+        updates["coach_id"] = req.coach_id
+
+    for attempt in range(5):
+        time.sleep(0.5)
+        profile_check = supabase.table("profiles").select("id").eq("id", new_user_id).execute()
+        if profile_check.data:
+            supabase.table("profiles").update(updates).eq("id", new_user_id).execute()
+            break
 
     return {
         "message": "User created successfully",
