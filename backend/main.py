@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import coaches, sessions, kids, attendance, notifications, analytics, auth, payments, locations, events
+from app.routes import coaches, sessions, kids, attendance, notifications, analytics, auth, payments, locations, events, availability
 
 app = FastAPI(title="Soccer Academy Manager")
 
@@ -22,6 +22,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["Not
 app.include_router(analytics.router,     prefix="/api/analytics",     tags=["Analytics"])
 app.include_router(payments.router,      prefix="/api/payments",      tags=["Payments"])
 app.include_router(events.router, prefix="/api/events", tags=["Events"])
+app.include_router(availability.router, prefix="/api/availability", tags=["Availability"])
 
 @app.get("/")
 def root():
