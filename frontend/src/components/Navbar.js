@@ -2,7 +2,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
   LayoutDashboard, Users, CalendarDays, GraduationCap,
-  ClipboardCheck, CreditCard, BarChart3, LogOut, Footprints
+  ClipboardCheck, CreditCard, BarChart3, LogOut, UserCog, Calendar
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -13,11 +13,14 @@ const NAV_ITEMS = [
   { to: "/attendance",label: "Attendance",icon: ClipboardCheck  },
   { to: "/payments",  label: "Payments",  icon: CreditCard      },
   { to: "/analytics", label: "Analytics", icon: BarChart3       },
+  { to: "/calendar",  label: "Calendar",  icon: Calendar        },
+  { to: "/users",     label: "Users",     icon: UserCog         },
 ];
 
 const COACH_ITEMS = [
   { to: "/coach-portal", label: "My Portal",  icon: LayoutDashboard },
   { to: "/attendance",   label: "Attendance", icon: ClipboardCheck  },
+  { to: "/calendar",     label: "Calendar",   icon: Calendar        },
 ];
 
 export default function Navbar() {
@@ -42,7 +45,7 @@ export default function Navbar() {
       {/* Logo */}
       <Link to="/" className="flex items-center gap-2.5 flex-shrink-0">
         <div>
-        <img src="/logo512.jpg" alt="FBL" className="h-10 w-auto"/>
+          <img src="/logo512.jpg" alt="FBL" className="h-10 w-auto"/>
         </div>
         <span className="font-extrabold text-white text-base tracking-tight">
           FBL<span style={{ color: "#00E5CC" }}>.</span>
