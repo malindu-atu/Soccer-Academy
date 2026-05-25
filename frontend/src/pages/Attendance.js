@@ -8,7 +8,7 @@ import { pageWrapper, card, input, btnPrimary, btnOutline } from "../components/
 import StudentFilter from "../components/StudentFilter";
 import axios from "axios";
 
-const api = axios.create({ baseURL: "http://localhost:8000/api" });
+const api = axios.create({ baseURL: process.env.REACT_APP_API_URL || "http://localhost:8000/api" });
 api.interceptors.request.use(c => {
   const u = JSON.parse(localStorage.getItem("user"));
   if (u?.access_token) c.headers.Authorization = `Bearer ${u.access_token}`;
