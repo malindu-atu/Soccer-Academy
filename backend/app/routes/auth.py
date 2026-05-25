@@ -112,7 +112,7 @@ def create_user(req: CreateUserRequest):
     if req.coach_id:
         profile_data["coach_id"] = req.coach_id
 
-    supabase.table("profiles").upsert(profile_data, on_conflict="id").execute()
+    service_supabase.table("profiles").upsert(profile_data, on_conflict="id").execute()
 
     return {
         "message": "User created successfully",
