@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { pageWrapper, card, input, btnPrimary } from "../components/UI";
 import {
   Check, Clock, ChevronLeft, ChevronRight,
-  CheckCircle2, Loader2, Bell, BellOff
+  CheckCircle2, Loader2, Bell, BellOff, AlertCircle
 } from "lucide-react";
 import axios from "axios";
 
@@ -45,7 +45,7 @@ function formatWeekLabel(monday) {
   const sunday = new Date(monday);
   sunday.setDate(monday.getDate() + 6);
   const fmt = d => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-  return `${fmt(monday)} -- ${fmt(sunday)}`;
+  return `${fmt(monday)} - ${fmt(sunday)}`;
 }
 
 function AvailabilitySection({ coachId }) {
@@ -55,6 +55,7 @@ function AvailabilitySection({ coachId }) {
   const [loading, setLoading]        = useState(false);
   const [saving, setSaving]          = useState(false);
   const [saved, setSaved]            = useState(false);
+  const [error, setError]            = useState("");
 
   const weekStart = toDateStr(monday);
   const weekDates = getWeekDates(monday);
@@ -87,7 +88,13 @@ function AvailabilitySection({ coachId }) {
   };
 
   const handleSubmit = async () => {
-    if (!coachId) return;
+    setError("");
+
+    if (!coachId) {
+      setError("Your account is not linked to a coach record. Ask an admin to link your account in User Management.");
+      return;
+    }
+
     setSaving(true);
     try {
       await submitAvailability({
@@ -97,12 +104,43 @@ function AvailabilitySection({ coachId }) {
         notes:      notes || null,
       });
       setSaved(true);
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      setError(e.response?.data?.detail || "Failed to submit. Please try again.");
+      console.error(e);
+    }
     setSaving(false);
   };
 
   const prevWeek = () => { const d = new Date(monday); d.setDate(d.getDate()-7); setMonday(d); };
   const nextWeek = () => { const d = new Date(monday); d.setDate(d.getDate()+7); setMonday(d); };
+
+  // Show warning if coach not linked
+  if (!coachId) {
+    return (
+      <div style={card} className="rounded-2xl p-5 sm:p-6">
+        <div className="flex items-center gap-3 mb-5">
+          <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+            <Clock size={17} />
+          </div>
+          <div>
+            <p className="text-white font-semibold">Weekly Availability</p>
+            <p className="text-gray-500 text-xs mt-0.5">Select the days you can coach this week</p>
+          </div>
+        </div>
+        <div style={{ backgroundColor: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.25)" }}
+          className="rounded-xl p-4 flex items-start gap-3">
+          <AlertCircle size={16} style={{ color: "#FCD34D" }} className="flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-semibold mb-1" style={{ color: "#FCD34D" }}>Account not linked</p>
+            <p className="text-gray-400 text-xs">
+              Your login is not linked to a coach record. Ask an admin to go to User Management and link your account to your coach profile.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={card} className="rounded-2xl p-5 sm:p-6">
@@ -117,6 +155,7 @@ function AvailabilitySection({ coachId }) {
         </div>
       </div>
 
+      {/* Week navigator */}
       <div className="flex items-center gap-2 mb-5">
         <button onClick={prevWeek}
           style={{ backgroundColor: "#0A1628", border: "1px solid rgba(0,229,204,0.2)", color: "#00E5CC" }}
@@ -141,6 +180,7 @@ function AvailabilitySection({ coachId }) {
         </div>
       ) : (
         <>
+          {/* Day picker grid */}
           <div className="grid grid-cols-7 gap-2 mb-5">
             {weekDates.map((date, i) => {
               const dateStr  = toDateStr(date);
@@ -185,6 +225,7 @@ function AvailabilitySection({ coachId }) {
             })}
           </div>
 
+          {/* Selected summary */}
           {selectedDates.length > 0 ? (
             <div style={{ backgroundColor: "rgba(0,229,204,0.06)", border: "1px solid rgba(0,229,204,0.15)" }}
               className="rounded-xl p-3 mb-4">
@@ -215,6 +256,7 @@ function AvailabilitySection({ coachId }) {
             </div>
           )}
 
+          {/* Notes */}
           <div className="mb-4">
             <label className="text-xs text-gray-400 mb-1.5 block">Notes for admin (optional)</label>
             <textarea style={input} rows={2}
@@ -223,6 +265,16 @@ function AvailabilitySection({ coachId }) {
               value={notes} onChange={e => { setNotes(e.target.value); setSaved(false); }} />
           </div>
 
+          {/* Error */}
+          {error && (
+            <div style={{ backgroundColor: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.2)" }}
+              className="rounded-xl p-3 mb-4 flex items-start gap-2">
+              <AlertCircle size={14} className="text-red-400 flex-shrink-0 mt-0.5" />
+              <p className="text-red-400 text-xs">{error}</p>
+            </div>
+          )}
+
+          {/* Submit */}
           <div className="flex items-center gap-3">
             <button onClick={handleSubmit} disabled={saving} style={btnPrimary}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm hover:opacity-90 disabled:opacity-50 transition-all">
@@ -248,7 +300,7 @@ function NotificationsSection({ coachId }) {
   const [loading, setLoading]             = useState(true);
 
   useEffect(() => {
-    if (!coachId) return;
+    if (!coachId) { setLoading(false); return; }
     getNotifications(coachId)
       .then(r => setNotifications(r.data))
       .catch(() => {})
