@@ -243,8 +243,6 @@ function PlayerAnalytics({ kids, locations }) {
                   <span className="text-gray-500 text-xs">{r.sessions?.age_group || ""}</span>
                   <span style={r.status === "present"
                     ? { color: "#00E5CC", backgroundColor: "rgba(0,229,204,0.1)" }
-                    : r.status === "late"
-                    ? { color: "#FCD34D", backgroundColor: "rgba(251,191,36,0.1)" }
                     : { color: "#F87171", backgroundColor: "rgba(239,68,68,0.1)" }}
                     className="text-xs px-2 py-0.5 rounded-full capitalize">{r.status}</span>
                 </div>

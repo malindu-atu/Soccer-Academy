@@ -7,7 +7,6 @@ import Sessions from "./pages/Sessions";
 import Kids from "./pages/Kids";
 import Attendance from "./pages/Attendance";
 import Analytics from "./pages/Analytics";
-import Payments from "./pages/Payments";
 import CoachPortal from "./pages/CoachPortal";
 import Navbar from "./components/Navbar";
 import CalendarPage from "./pages/Calendar";

@@ -3,11 +3,15 @@ from pydantic import BaseModel
 from app.database import supabase
 from typing import Optional
 from datetime import date
+from collections import defaultdict
 
 router = APIRouter()
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+class RateUpdate(BaseModel):
+    rate_per_session: float
+    
 class OtherIncomeCreate(BaseModel):
     title: str
     amount: float
@@ -37,20 +41,97 @@ class PaymentUpsert(BaseModel):
     status: str
     amount: Optional[float] = None
     note: Optional[str] = None
+    is_manual_amount: bool = False
+    
+    
+# ── Session rates (per age group) ────────────────────────────────────────────
+
+@router.get("/rates")
+def get_rates():
+    res = supabase.table("finance_rates").select("*").order("age_group").execute()
+    return res.data
+
+@router.put("/rates/{age_group}")
+def update_rate(age_group: str, data: RateUpdate):
+    res = supabase.table("finance_rates").update({"rate_per_session": data.rate_per_session}) \
+        .eq("age_group", age_group).execute()
+    if not res.data:
+        res = supabase.table("finance_rates").insert({
+            "age_group": age_group, "rate_per_session": data.rate_per_session
+        }).execute()
+    return res.data[0]
 
 # ── Payment (student fees) ────────────────────────────────────────────────────
 
 @router.get("/payments")
-def get_payments(month: str = Query(...), location_id: Optional[str] = Query(None)):
+def get_payments(
+    month: str = Query(...),
+    location_id: Optional[str] = Query(None),
+    age_group: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+):
     kids_query = supabase.table("kids").select("*, locations(id, name)").eq("is_active", True)
     if location_id:
         kids_query = kids_query.eq("location_id", location_id)
+    if age_group:
+        kids_query = kids_query.eq("age_group", age_group)
+    if search:
+        kids_query = kids_query.ilike("name", f"%{search}%")
     kids_res = kids_query.execute()
+    kids = kids_res.data
 
-    payments_res = supabase.table("payments").select("*").eq("month", month).execute()
-    payment_map  = {p["kid_id"]: p for p in payments_res.data}
+    if not kids:
+        return {"kids": [], "payment_map": {}}
 
-    return {"kids": kids_res.data, "payment_map": payment_map}
+    kid_ids = [k["id"] for k in kids]
+
+    # Rates per age group
+    rates_res = supabase.table("finance_rates").select("*").execute()
+    rate_map = {r["age_group"]: r["rate_per_session"] for r in rates_res.data}
+
+    # Sessions in this month
+    month_start = f"{month}-01"
+    month_end = _next_month_start(month)
+    sessions_res = supabase.table("sessions").select("id").gte("date", month_start).lt("date", month_end).execute()
+    session_ids_this_month = {s["id"] for s in sessions_res.data}
+
+    # Attendance (present only) for these kids, this month
+    attended_count = defaultdict(int)
+    if session_ids_this_month:
+        att_res = supabase.table("attendance").select("kid_id, session_id, status") \
+            .in_("kid_id", kid_ids).eq("status", "present").execute()
+        for a in att_res.data:
+            if a["session_id"] in session_ids_this_month:
+                attended_count[a["kid_id"]] += 1
+
+    # Existing payment records
+    payments_res = supabase.table("payments").select("*").eq("month", month).in_("kid_id", kid_ids).execute()
+    payment_map = {p["kid_id"]: p for p in payments_res.data}
+
+    # Attach computed fields to each kid
+    for k in kids:
+        sessions_attended = attended_count.get(k["id"], 0)
+        rate = rate_map.get(k["age_group"], 0)
+        calculated_amount = sessions_attended * rate
+        k["sessions_attended"] = sessions_attended
+        k["rate_per_session"] = rate
+        k["calculated_amount"] = calculated_amount
+
+        existing = payment_map.get(k["id"])
+        if existing and existing.get("is_manual_amount"):
+            payment_map[k["id"]]["display_amount"] = existing["amount"]
+        else:
+            payment_map[k["id"]] = payment_map.get(k["id"], {})
+            payment_map[k["id"]]["display_amount"] = calculated_amount
+
+    return {"kids": kids, "payment_map": payment_map}
+
+
+def _next_month_start(month: str) -> str:
+    y, m = map(int, month.split("-"))
+    if m == 12:
+        return f"{y+1}-01-01"
+    return f"{y}-{str(m+1).zfill(2)}-01"
 
 @router.post("/payments")
 def upsert_payment(data: PaymentUpsert):
@@ -59,7 +140,8 @@ def upsert_payment(data: PaymentUpsert):
     record = {
         "kid_id": data.kid_id, "month": data.month,
         "status": data.status, "amount": data.amount,
-        "note": data.note, "updated_at": date.today().isoformat()
+        "note": data.note, "is_manual_amount": data.is_manual_amount,
+        "updated_at": date.today().isoformat()
     }
     if existing.data:
         res = supabase.table("payments").update(record).eq("id", existing.data[0]["id"]).execute()

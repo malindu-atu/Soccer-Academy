@@ -67,11 +67,6 @@ export const getAgeGroupAnalytics = () => api.get("/analytics/age-group");
 export const getLocationAnalytics = () => api.get("/analytics/location");
 export const getRetentionAnalytics = () => api.get("/analytics/retention");
 
-// Payments
-export const getPayments = (month) => api.get(`/payments${month ? `?month=${month}` : ""}`);
-export const getPaymentSummary = (month) => api.get(`/payments/summary/${month}`);
-export const upsertPayment = (data) => api.post("/payments", data);
-export const getKidPayments = (id) => api.get(`/payments/kid/${id}`);
 
 // Add with the other auth exports
 export const createUser = (data) => api.post("/auth/create-user", data);
