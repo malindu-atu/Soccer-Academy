@@ -71,7 +71,7 @@ Extract the following student details and return ONLY valid JSON with these exac
 {
   "name": "full name of the student",
   "date_of_birth": "date in YYYY-MM-DD format or null",
-  "age_group": "one of U6/U7/U8/U9/U10/U11/U12/U13/U14/U15/U16 based on age, or null",
+  "age_group": "one of U7/U13/U12_DEV/U13_GIRLS based on age and gender, or null. U7 is under 7. U13 is the standard under-13 group. U12_DEV is the U12 development squad. U13_GIRLS is the girls' under-13 group.",
   "parent_name": "parent or guardian full name or null",
   "parent_contact": "phone number or null",
   "enrollment_date": "date in YYYY-MM-DD format or null"
@@ -79,7 +79,7 @@ Extract the following student details and return ONLY valid JSON with these exac
 Rules:
 - Convert all dates to YYYY-MM-DD format
 - If a field is not found, use null
-- Infer age_group from date of birth if not explicitly stated
+- If age group cannot be confidently determined, use null rather than guessing
 - Return ONLY the JSON object, no explanation or markdown"""
 
     try:
@@ -137,19 +137,12 @@ async def jotform_webhook(request: Request):
     def map_age_group(raw: str) -> str:
         raw = raw.upper().replace(" ", "")
         mapping = {
-            "U6": "U6", "UNDER6": "U6",
             "U7": "U7", "UNDER7": "U7",
-            "U8": "U8", "UNDER8": "U8",
-            "U9": "U9", "UNDER9": "U9",
-            "U10": "U10", "UNDER10": "U10",
-            "U11": "U11", "UNDER11": "U11",
-            "U12": "U12", "UNDER12": "U12",
             "U13": "U13", "UNDER13": "U13",
-            "U14": "U14", "UNDER14": "U14",
-            "U15": "U15", "UNDER15": "U15",
-            "U16": "U16", "UNDER16": "U16",
+            "U12DEV": "U12_DEV", "U12DEVELOPMENT": "U12_DEV", "U12_DEV": "U12_DEV",
+            "U13GIRLS": "U13_GIRLS", "U13_GIRLS": "U13_GIRLS", "U13GIRL": "U13_GIRLS",
         }
-        return mapping.get(raw, "U6")
+        return mapping.get(raw, "U7")
 
     kid = {
         "name": data.get("q3_fullName") or data.get("q3_fullname", ""),
