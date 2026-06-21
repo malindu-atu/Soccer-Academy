@@ -18,22 +18,20 @@ api.interceptors.request.use(c => {
 const getLocations       = ()      => api.get("/locations/");
 const getCoaches         = ()      => api.get("/coaches/");
 const getSummary         = (m)     => api.get(`/finance/summary/${m}`);
-const getPayments        = (m, l)  => api.get(`/finance/payments?month=${m}${l ? `&location_id=${l}` : ""}`);
+const getRates           = ()      => api.get("/finance/rates");
+const updateRate         = (ag, d) => api.put(`/finance/rates/${ag}`, d);
+const getPayments        = (m, params = {}) => api.get(`/finance/payments?month=${m}`, { params });
 const getPaymentSummary  = (m, l)  => api.get(`/finance/payments/summary/${m}${l ? `?location_id=${l}` : ""}`);
 const upsertPayment      = (d)     => api.post("/finance/payments", d);
 const getOtherIncome     = (m)     => api.get(`/finance/other-income?month=${m}`);
 const createOtherIncome  = (d)     => api.post("/finance/other-income", d);
 const deleteOtherIncome  = (id)    => api.delete(`/finance/other-income/${id}`);
-const getFixedExpenses   = ()      => api.get("/finance/fixed-expenses");
-const createFixedExpense = (d)     => api.post("/finance/fixed-expenses", d);
-const deleteFixedExpense = (id)    => api.delete(`/finance/fixed-expenses/${id}`);
-const getVariableExpenses= (m)     => api.get(`/finance/variable-expenses?month=${m}`);
-const createVariableExp  = (d)     => api.post("/finance/variable-expenses", d);
-const deleteVariableExp  = (id)    => api.delete(`/finance/variable-expenses/${id}`);
+const getExpenses        = (m)     => api.get(`/finance/expenses?month=${m}`);
+const createExpense      = (d)     => api.post("/finance/expenses", d);
+const deleteExpense      = (id)    => api.delete(`/finance/expenses/${id}`);
 const getSalaries        = (m)     => api.get(`/finance/salaries?month=${m}`);
 const createSalary       = (d)     => api.post("/finance/salaries", d);
 const deleteSalary       = (id)    => api.delete(`/finance/salaries/${id}`);
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toMonthStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
