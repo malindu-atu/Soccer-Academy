@@ -1,7 +1,8 @@
 import { input } from "./UI";
 import { Search, SlidersHorizontal, X, ChevronDown } from "lucide-react";
 
-const AGE_GROUPS = ["U6","U7","U8","U9","U10","U11","U12","U13","U14","U15","U16"];
+const AGE_GROUPS = ["U7", "U13", "U12_DEV", "U13_GIRLS"];
+const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
 
 export default function StudentFilter({
   search = "", onSearch,
@@ -37,7 +38,7 @@ export default function StudentFilter({
         >
           <option value="" style={{ backgroundColor: "#0D1F3C" }}>All Ages</option>
           {AGE_GROUPS.map(g => (
-            <option key={g} value={g} style={{ backgroundColor: "#0D1F3C" }}>{g}</option>
+            <option key={g} value={g} style={{ backgroundColor: "#0D1F3C" }}>{AGE_GROUP_LABELS[g]}</option>
           ))}
         </select>
         <ChevronDown size={13} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />

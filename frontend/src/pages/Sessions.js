@@ -20,7 +20,8 @@ const deleteTemplate    = (id)     => api.delete(`/sessions/templates/${id}`);
 const updateEnrollments = (id, ks) => api.put(`/sessions/templates/${id}/enrollments`, { kid_ids: ks });
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
-const AGE_GROUPS = ["U6","U7","U8","U9","U10","U11","U12","U13","U14","U15","U16"];
+const AGE_GROUPS = ["U7", "U13", "U12_DEV", "U13_GIRLS"];
+const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
 
 const DAY_COLORS = {
   Monday:    "#00E5CC", Tuesday:  "#4DFFD2", Wednesday: "#FCD34D",
@@ -233,7 +234,7 @@ function LocationTile({ loc, coaches, allKids, onRefresh, onDelete }) {
                     <select style={{ ...input, backgroundImage: "none" }}
                       className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
                       value={form.age_group} onChange={e => setForm(f => ({ ...f, age_group: e.target.value }))}>
-                      {AGE_GROUPS.map(g => <option key={g} style={{ backgroundColor: "#0D1F3C" }}>{g}</option>)}
+                      {AGE_GROUPS.map(g => <option key={g} value={g} style={{ backgroundColor: "#0D1F3C" }}>{AGE_GROUP_LABELS[g]}</option>)}
                     </select>
                   </div>
                   <div>
