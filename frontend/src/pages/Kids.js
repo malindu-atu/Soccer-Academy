@@ -5,7 +5,8 @@ import { pageWrapper, card, input, btnPrimary, btnOutline } from "../components/
 import StudentFilter from "../components/StudentFilter";
 import axios from "axios";
 
-const AGE_GROUPS = ["U6","U7","U8","U9","U10","U11","U12","U13","U14","U15","U16"];
+const AGE_GROUPS = ["U7", "U13", "U12_DEV", "U13_GIRLS"];
+const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
 
 const EMPTY_FORM = {
   name: "", date_of_birth: "", age_group: "U6",
@@ -170,7 +171,7 @@ function EditModal({ kid, locations, onSave, onClose }) {
             <select style={{ ...input, backgroundImage: "none" }}
               className="w-full rounded-lg p-3 text-sm focus:outline-none"
               value={form.age_group} onChange={e => setForm({ ...form, age_group: e.target.value })}>
-              {AGE_GROUPS.map(g => <option key={g} style={{ backgroundColor: "#0D1F3C" }}>{g}</option>)}
+              {AGE_GROUPS.map(g => <option key={g} value={g} style={{ backgroundColor: "#0D1F3C" }}>{AGE_GROUP_LABELS[g]}</option>)}
             </select>
           </div>
 
@@ -321,7 +322,7 @@ export default function Kids() {
               <select style={{ ...input, backgroundImage: "none" }}
                 className="w-full rounded-lg p-3 text-sm focus:outline-none"
                 value={form.age_group} onChange={e => setForm({ ...form, age_group: e.target.value })}>
-                {AGE_GROUPS.map(g => <option key={g} style={{ backgroundColor: "#0D1F3C" }}>{g}</option>)}
+                {AGE_GROUPS.map(g => <option key={g} value={g} style={{ backgroundColor: "#0D1F3C" }}>{AGE_GROUP_LABELS[g]}</option>)}
               </select>
             </div>
 
