@@ -115,14 +115,26 @@ function WeeklyAvailabilityGrid({ coaches }) {
   const submittedIds = new Set(data.map((d) => d.coach_id));
   const notSubmitted = coaches.filter((c) => !submittedIds.has(c.id));
 
-  // Count per day
+  const isWeekendDate = (d) => { const day = d.getDay(); return day === 0 || day === 6; };
+
+  // Count per weekday date, and per weekend date+slot
   const countByDate = {};
+  const countByWeekendSlot = {}; // `${date}_${slot}` -> [coach]
   weekDates.forEach((d) => {
-    countByDate[toDateStr(d)] = [];
+    const ds = toDateStr(d);
+    countByDate[ds] = [];
+    if (isWeekendDate(d)) {
+      countByWeekendSlot[`${ds}_morning`] = [];
+      countByWeekendSlot[`${ds}_afternoon`] = [];
+    }
   });
   data.forEach((row) => {
-    row.dates.forEach((dateStr) => {
+    (row.dates || []).forEach((dateStr) => {
       if (countByDate[dateStr]) countByDate[dateStr].push(row.coach);
+    });
+    (row.weekend_slots || []).forEach(({ date, slot }) => {
+      const key = `${date}_${slot}`;
+      if (countByWeekendSlot[key]) countByWeekendSlot[key].push(row.coach);
     });
   });
 
@@ -189,91 +201,59 @@ function WeeklyAvailabilityGrid({ coaches }) {
           <div className="grid grid-cols-7 gap-2 mb-4">
             {weekDates.map((date, i) => {
               const dateStr = toDateStr(date);
-              const available = countByDate[dateStr] || [];
-              const count = available.length;
               const total = coaches.length;
-              const pct = total > 0 ? (count / total) * 100 : 0;
-              const color =
-                pct >= 70
-                  ? "#00E5CC"
-                  : pct >= 40
-                  ? "#FCD34D"
-                  : count > 0
-                  ? "#F87171"
-                  : "#374151";
+              const weekend = isWeekendDate(date);
+
+              const renderCountBlock = (label, available) => {
+                const count = available.length;
+                const pct = total > 0 ? (count / total) * 100 : 0;
+                const color =
+                  pct >= 70 ? "#00E5CC" : pct >= 40 ? "#FCD34D" : count > 0 ? "#F87171" : "#374151";
+                return (
+                  <div key={label}>
+                    {label && (
+                      <p className="text-gray-500 text-center mb-0.5" style={{ fontSize: 9 }}>{label}</p>
+                    )}
+                    <div style={{ backgroundColor: `${color}18`, color }}
+                      className="text-center text-xs font-bold py-1 rounded-lg mb-1">
+                      {count}/{total}
+                    </div>
+                    <div style={{ backgroundColor: "rgba(255,255,255,0.06)" }} className="rounded-full h-1 mb-1.5">
+                      <div style={{ width: `${pct}%`, backgroundColor: color, transition: "width 0.5s ease" }}
+                        className="h-1 rounded-full" />
+                    </div>
+                    <div className="space-y-0.5">
+                      {available.map((coach) => (
+                        <p key={coach?.id} className="text-gray-400 truncate" style={{ fontSize: 9 }}>
+                          {coach?.name?.split(" ")[0]}
+                        </p>
+                      ))}
+                      {count === 0 && (
+                        <p className="text-gray-700 text-center" style={{ fontSize: 9 }}>None</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              };
 
               return (
-                <div
-                  key={dateStr}
-                  style={{
-                    backgroundColor: "#0A1628",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                  }}
-                  className="rounded-xl p-2.5"
-                >
-                  {/* Day label */}
-                  <p
-                    className="text-xs font-bold uppercase tracking-wider text-center mb-1"
-                    style={{ color: i >= 5 ? "#00E5CC" : "#6B7280" }}
-                  >
+                <div key={dateStr}
+                  style={{ backgroundColor: "#0A1628", border: "1px solid rgba(255,255,255,0.06)" }}
+                  className="rounded-xl p-2.5">
+                  <p className="text-xs font-bold uppercase tracking-wider text-center mb-1"
+                    style={{ color: i >= 5 ? "#00E5CC" : "#6B7280" }}>
                     {DAYS[i]}
                   </p>
-                  <p className="text-white font-bold text-center text-sm mb-2">
-                    {date.getDate()}
-                  </p>
+                  <p className="text-white font-bold text-center text-sm mb-2">{date.getDate()}</p>
 
-                  {/* Count */}
-                  <div
-                    style={{ backgroundColor: `${color}18`, color }}
-                    className="text-center text-xs font-bold py-1 rounded-lg mb-2"
-                  >
-                    {count}/{total}
-                  </div>
-
-                  {/* Progress bar */}
-                  <div
-                    style={{ backgroundColor: "rgba(255,255,255,0.06)" }}
-                    className="rounded-full h-1 mb-2"
-                  >
-                    <div
-                      style={{
-                        width: `${pct}%`,
-                        backgroundColor: color,
-                        transition: "width 0.5s ease",
-                      }}
-                      className="h-1 rounded-full"
-                    />
-                  </div>
-
-                  {/* Avatars */}
-                  <div className="space-y-1">
-                    {available.map((coach) => (
-                      <div key={coach?.id} className="flex items-center gap-1">
-                        <div
-                          style={{
-                            backgroundColor: "rgba(0,229,204,0.15)",
-                            color: "#00E5CC",
-                            fontSize: 9,
-                          }}
-                          className="w-4 h-4 rounded-full flex items-center justify-center font-bold flex-shrink-0"
-                        ></div>
-                        <span
-                          className="text-gray-400 truncate"
-                          style={{ fontSize: 10 }}
-                        >
-                          {coach?.name?.split(" ")[0]}
-                        </span>
-                      </div>
-                    ))}
-                    {count === 0 && (
-                      <p
-                        className="text-gray-700 text-center"
-                        style={{ fontSize: 10 }}
-                      >
-                        None
-                      </p>
-                    )}
-                  </div>
+                  {weekend ? (
+                    <div className="space-y-2">
+                      {renderCountBlock("AM", countByWeekendSlot[`${dateStr}_morning`] || [])}
+                      {renderCountBlock("PM", countByWeekendSlot[`${dateStr}_afternoon`] || [])}
+                    </div>
+                  ) : (
+                    renderCountBlock(null, countByDate[dateStr] || [])
+                  )}
                 </div>
               );
             })}
