@@ -7,8 +7,9 @@ router = APIRouter()
 
 class AvailabilitySubmit(BaseModel):
     coach_id: str
-    dates: List[str]          # list of YYYY-MM-DD dates
-    week_start: str           # YYYY-MM-DD (Monday of that week)
+    dates: List[str]                      # weekday dates (full-day availability)
+    weekend_slots: List[dict] = []        # [{ "date": "YYYY-MM-DD", "slot": "morning"|"afternoon" }, ...]
+    week_start: str                       # YYYY-MM-DD (Monday of that week)
     notes: Optional[str] = None
 
 @router.post("/submit")
@@ -21,19 +22,30 @@ def submit_availability(data: AvailabilitySubmit):
         .eq("week_start", data.week_start) \
         .execute()
 
-    if data.dates:
-        records = [
-            {
-                "coach_id": data.coach_id,
-                "date": d,
-                "week_start": data.week_start,
-                "notes": data.notes,
-            }
-            for d in data.dates
-        ]
+    records = [
+        {
+            "coach_id": data.coach_id,
+            "date": d,
+            "week_start": data.week_start,
+            "notes": data.notes,
+            "slot": "full",
+        }
+        for d in data.dates
+    ]
+
+    for ws in data.weekend_slots:
+        records.append({
+            "coach_id": data.coach_id,
+            "date": ws["date"],
+            "week_start": data.week_start,
+            "notes": data.notes,
+            "slot": ws["slot"],
+        })
+
+    if records:
         supabase.table("coach_availability").insert(records).execute()
 
-    return {"message": "Availability submitted", "count": len(data.dates)}
+    return {"message": "Availability submitted", "count": len(records)}
 
 @router.get("/week")
 def get_week_availability(week_start: str = Query(...)):
@@ -52,10 +64,14 @@ def get_week_availability(week_start: str = Query(...)):
             coaches_map[cid] = {
                 "coach_id": cid,
                 "coach": coach,
-                "dates": [],
+                "dates": [],          # full-day weekday dates
+                "weekend_slots": [],  # [{date, slot}]
                 "notes": row.get("notes"),
             }
-        coaches_map[cid]["dates"].append(row["date"])
+        if row.get("slot") in ("morning", "afternoon"):
+            coaches_map[cid]["weekend_slots"].append({"date": row["date"], "slot": row["slot"]})
+        else:
+            coaches_map[cid]["dates"].append(row["date"])
 
     return list(coaches_map.values())
 
@@ -68,6 +84,7 @@ def get_coach_availability(coach_id: str, week_start: str = Query(...)):
         .eq("week_start", week_start) \
         .execute()
 
-    dates = [r["date"] for r in res.data]
+    dates = [r["date"] for r in res.data if r.get("slot", "full") == "full"]
+    weekend_slots = [{"date": r["date"], "slot": r["slot"]} for r in res.data if r.get("slot") in ("morning", "afternoon")]
     notes = res.data[0]["notes"] if res.data else ""
-    return {"dates": dates, "notes": notes}
+    return {"dates": dates, "weekend_slots": weekend_slots, "notes": notes}
