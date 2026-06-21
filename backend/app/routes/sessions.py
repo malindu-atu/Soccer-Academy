@@ -129,17 +129,19 @@ def get_session_history():
 
     # Fetch attendance counts per session in one query
     att_res = supabase.table("attendance").select("session_id, status").execute()
-    att_map = {}  # session_id → {present, absent, late, total}
+    att_map = {}  # session_id → {present, absent, total}
     for a in att_res.data:
+        if a["status"] not in ("present", "absent"):
+            continue
         sid = a["session_id"]
         if sid not in att_map:
-            att_map[sid] = {"present": 0, "absent": 0, "late": 0, "total": 0}
+            att_map[sid] = {"present": 0, "absent": 0, "total": 0}
         att_map[sid][a["status"]] = att_map[sid].get(a["status"], 0) + 1
         att_map[sid]["total"] += 1
 
     # Attach attendance counts to sessions
     for s in sessions:
-        s["attendance_counts"] = att_map.get(s["id"], {"present": 0, "absent": 0, "late": 0, "total": 0})
+        s["attendance_counts"] = att_map.get(s["id"], {"present": 0, "absent": 0, "total": 0})
 
     # Group by location → month → sessions
     from collections import defaultdict

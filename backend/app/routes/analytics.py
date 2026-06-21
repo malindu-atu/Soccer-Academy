@@ -11,15 +11,14 @@ def student_analytics(kid_id: str):
     total = len(records)
     present = len([r for r in records if r["status"] == "present"])
     absent = len([r for r in records if r["status"] == "absent"])
-    late = len([r for r in records if r["status"] == "late"])
     rate = round((present / total) * 100, 1) if total > 0 else 0
 
     # Attendance trend by month
-    monthly = defaultdict(lambda: {"present": 0, "absent": 0, "late": 0})
+    monthly = defaultdict(lambda: {"present": 0, "absent": 0})
     for r in records:
         session = r.get("sessions") or {}
         date = session.get("date", "")
-        if date:
+        if date and r["status"] in ("present", "absent"):
             month = date[:7]  # YYYY-MM
             monthly[month][r["status"]] += 1
     trend = [{"month": m, **v} for m, v in sorted(monthly.items())]
@@ -41,7 +40,6 @@ def student_analytics(kid_id: str):
         "total_sessions": total,
         "present": present,
         "absent": absent,
-        "late": late,
         "attendance_rate": rate,
         "records": records,
         "monthly_trend": trend,
