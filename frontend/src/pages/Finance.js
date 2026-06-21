@@ -494,18 +494,77 @@ function IncomeTab({ month }) {
 }
 
 // ── Expenses tab ──────────────────────────────────────────────────────────────
+// ── Expense feed (expenses + salaries, filterable) ─────────────────────────────
+function ExpenseFeed({ expenses, salaries }) {
+  const [typeFilter, setTypeFilter] = useState(""); // "" | "expense" | "salary"
+
+  const expenseEntries = expenses.map(x => ({
+    id: `expense-${x.id}`, type: "expense", title: x.title,
+    subtitle: x.notes || "Expense", amount: x.amount, created_at: x.created_at,
+  }));
+  const salaryEntries = salaries.map(x => ({
+    id: `salary-${x.id}`, type: "salary", title: x.coaches?.name || "Unknown Coach",
+    subtitle: x.notes || "Salary", amount: x.amount, created_at: x.created_at,
+  }));
+
+  const combined = [...expenseEntries, ...salaryEntries]
+    .filter(e => !typeFilter || e.type === typeFilter)
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+
+  const total = combined.reduce((s, e) => s + (e.amount || 0), 0);
+
+  return (
+    <div style={card} className="rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <p className="text-white font-semibold text-sm">Expenses This Month</p>
+          <p className="text-gray-500 text-xs mt-0.5">{combined.length} entries</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span style={{ color: "#F87171" }} className="text-sm font-bold">{fmt(total)}</span>
+          <select style={{ ...input, backgroundImage: "none" }}
+            className="rounded-lg px-3 py-1.5 text-xs focus:outline-none"
+            value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+            <option value="" style={{ backgroundColor: "#0D1F3C" }}>All</option>
+            <option value="expense" style={{ backgroundColor: "#0D1F3C" }}>Expenses</option>
+            <option value="salary" style={{ backgroundColor: "#0D1F3C" }}>Salaries</option>
+          </select>
+        </div>
+      </div>
+      {combined.length === 0 ? (
+        <p className="text-gray-600 text-sm text-center py-6">No expenses recorded yet this month</p>
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {combined.map(e => (
+            <div key={e.id} className="flex items-center gap-3 py-2"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={e.type === "expense"
+                  ? { backgroundColor: "rgba(251,191,36,0.1)", color: "#FCD34D" }
+                  : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
+                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0 capitalize">{e.type === "expense" ? "Expense" : "Salary"}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm truncate">{e.title}</p>
+                <p className="text-gray-500 text-xs truncate">{e.subtitle}</p>
+              </div>
+              <p style={{ color: "#F87171" }} className="text-sm font-semibold flex-shrink-0">{fmt(e.amount)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Expenses tab ──────────────────────────────────────────────────────────────
 function ExpensesTab({ month }) {
-  const [coaches, setCoaches]           = useState([]);
-  const [fixed, setFixed]               = useState([]);
-  const [variable, setVariable]         = useState([]);
-  const [salaries, setSalaries]         = useState([]);
-  const [showFixed, setShowFixed]       = useState(false);
-  const [showVariable, setShowVariable] = useState(false);
-  const [showSalary, setShowSalary]     = useState(false);
-  const [fixedForm, setFixedForm]       = useState({ title: "", amount: "" });
-  const [varForm, setVarForm]           = useState({ title: "", amount: "", notes: "" });
-  const [salForm, setSalForm]           = useState({ coach_id: "", amount: "", notes: "" });
-  const [loading, setLoading]           = useState(false);
+  const [coaches, setCoaches]     = useState([]);
+  const [expenses, setExpenses]   = useState([]);
+  const [salaries, setSalaries]   = useState([]);
+  const [showExpense, setShowExpense] = useState(false);
+  const [showSalary, setShowSalary]   = useState(false);
+  const [expForm, setExpForm]     = useState({ title: "", amount: "", notes: "" });
+  const [salForm, setSalForm]     = useState({ coach_id: "", amount: "", notes: "" });
+  const [loading, setLoading]     = useState(false);
 
   useEffect(() => {
     getCoaches().then(r => setCoaches(r.data)).catch(() => {});
@@ -514,13 +573,11 @@ function ExpensesTab({ month }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [fRes, vRes, sRes] = await Promise.all([
-        getFixedExpenses(),
-        getVariableExpenses(month),
+      const [eRes, sRes] = await Promise.all([
+        getExpenses(month),
         getSalaries(month),
       ]);
-      setFixed(fRes.data);
-      setVariable(vRes.data);
+      setExpenses(eRes.data);
       setSalaries(sRes.data);
     } catch (e) {}
     setLoading(false);
@@ -528,20 +585,12 @@ function ExpensesTab({ month }) {
 
   useEffect(() => { load(); }, [load]);
 
-  const addFixed = async () => {
-    if (!fixedForm.title || !fixedForm.amount) return;
-    await createFixedExpense({ title: fixedForm.title, amount: parseFloat(fixedForm.amount) });
-    setFixedForm({ title: "", amount: "" });
-    setShowFixed(false);
-    getFixedExpenses().then(r => setFixed(r.data));
-  };
-
-  const addVariable = async () => {
-    if (!varForm.title || !varForm.amount) return;
-    await createVariableExp({ ...varForm, amount: parseFloat(varForm.amount), month });
-    setVarForm({ title: "", amount: "", notes: "" });
-    setShowVariable(false);
-    getVariableExpenses(month).then(r => setVariable(r.data));
+  const addExpense = async () => {
+    if (!expForm.title || !expForm.amount) return;
+    await createExpense({ ...expForm, amount: parseFloat(expForm.amount), month });
+    setExpForm({ title: "", amount: "", notes: "" });
+    setShowExpense(false);
+    getExpenses(month).then(r => setExpenses(r.data));
   };
 
   const addSalary = async () => {
@@ -552,10 +601,8 @@ function ExpensesTab({ month }) {
     getSalaries(month).then(r => setSalaries(r.data));
   };
 
-  const fixedTotal    = fixed.reduce((s, x) => s + (x.amount || 0), 0);
-  const variableTotal = variable.reduce((s, x) => s + (x.amount || 0), 0);
-  const salaryTotal   = salaries.reduce((s, x) => s + (x.amount || 0), 0);
-  const totalExpenses = fixedTotal + variableTotal + salaryTotal;
+  const expenseTotal = expenses.reduce((s, x) => s + (x.amount || 0), 0);
+  const salaryTotal  = salaries.reduce((s, x) => s + (x.amount || 0), 0);
 
   const ExpenseRow = ({ item, onDelete, amountColor = "#F87171" }) => (
     <div className="flex items-center gap-3 py-2.5 group"
@@ -572,35 +619,13 @@ function ExpensesTab({ month }) {
     </div>
   );
 
-  const SectionCard = ({ title, subtitle, total, color, showForm, onToggle, form, children }) => (
-    <div style={card} className="rounded-2xl p-4">
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <p className="text-white font-semibold text-sm">{title}</p>
-          {subtitle && <p className="text-gray-500 text-xs mt-0.5">{subtitle}</p>}
-        </div>
-        <div className="flex items-center gap-3">
-          {total > 0 && <span style={{ color }} className="text-sm font-bold">{fmt(total)}</span>}
-          <button onClick={onToggle}
-            style={showForm ? btnOutline : { ...btnPrimary, fontSize: 11 }}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
-            {showForm ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
-          </button>
-        </div>
-      </div>
-      {form}
-      {children}
-    </div>
-  );
-
   return (
     <div className="space-y-5">
       {/* Total expenses summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         {[
-          { label: "Fixed",    value: fixedTotal,    color: "#F87171" },
-          { label: "Salaries", value: salaryTotal,   color: "#A78BFA" },
-          { label: "Variable", value: variableTotal, color: "#FCD34D" },
+          { label: "Expenses", value: expenseTotal, color: "#FCD34D" },
+          { label: "Salaries", value: salaryTotal,  color: "#A78BFA" },
         ].map(s => (
           <div key={s.label} style={card} className="rounded-xl p-3 text-center">
             <p style={{ color: s.color }} className="text-lg font-bold">{fmt(s.value)}</p>
@@ -609,66 +634,85 @@ function ExpensesTab({ month }) {
         ))}
       </div>
 
-      {/* Fixed expenses */}
-      <SectionCard
-        title="Fixed Expenses"
-        subtitle="Recurring monthly costs (rent, utilities, etc)"
-        total={fixedTotal}
-        color="#F87171"
-        showForm={showFixed}
-        onToggle={() => setShowFixed(f => !f)}
-        form={showFixed && (
-          <div style={{ backgroundColor: "#0A1628", border: "1px solid rgba(248,113,113,0.15)" }}
+      {/* Expenses */}
+      <div style={card} className="rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-white font-semibold text-sm">Expenses</p>
+            <p className="text-gray-500 text-xs mt-0.5">All costs for this month</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {expenseTotal > 0 && <span style={{ color: "#FCD34D" }} className="text-sm font-bold">{fmt(expenseTotal)}</span>}
+            <button onClick={() => setShowExpense(f => !f)}
+              style={showExpense ? btnOutline : btnPrimary}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+              {showExpense ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
+            </button>
+          </div>
+        </div>
+
+        {showExpense && (
+          <div style={{ backgroundColor: "#0A1628", border: "1px solid rgba(251,191,36,0.15)" }}
             className="rounded-xl p-4 mb-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Title</label>
                 <input style={input} className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  placeholder="e.g. Ground rent" value={fixedForm.title}
-                  onChange={e => setFixedForm(f => ({ ...f, title: e.target.value }))} />
+                  placeholder="e.g. Ground rent, equipment..." value={expForm.title}
+                  onChange={e => setExpForm(f => ({ ...f, title: e.target.value }))} />
               </div>
               <div>
-                <label className="text-xs text-gray-400 mb-1 block">Monthly Amount (LKR)</label>
+                <label className="text-xs text-gray-400 mb-1 block">Amount (LKR)</label>
                 <input style={input} type="number" className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  placeholder="0.00" value={fixedForm.amount}
-                  onChange={e => setFixedForm(f => ({ ...f, amount: e.target.value }))} />
+                  placeholder="0.00" value={expForm.amount}
+                  onChange={e => setExpForm(f => ({ ...f, amount: e.target.value }))} />
               </div>
             </div>
-            <button onClick={addFixed} style={btnPrimary}
+            <div>
+              <label className="text-xs text-gray-400 mb-1 block">Notes (optional)</label>
+              <input style={input} className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
+                placeholder="Any details..." value={expForm.notes}
+                onChange={e => setExpForm(f => ({ ...f, notes: e.target.value }))} />
+            </div>
+            <button onClick={addExpense} style={btnPrimary}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-90 transition-all">
-              <Check size={13} /> Add Fixed Expense
+              <Check size={13} /> Add Expense
             </button>
           </div>
         )}
-      >
+
         {loading ? (
           <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-gray-500" /></div>
-        ) : fixed.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-4">No fixed expenses added</p>
+        ) : expenses.length === 0 ? (
+          <p className="text-gray-600 text-sm text-center py-4">No expenses added this month</p>
         ) : (
           <div>
-            {fixed.map(x => (
+            {expenses.map(x => (
               <ExpenseRow key={x.id} item={x}
-                onDelete={async (id) => { await deleteFixedExpense(id); setFixed(f => f.filter(i => i.id !== id)); }} />
+                onDelete={async (id) => { await deleteExpense(id); setExpenses(e => e.filter(i => i.id !== id)); }} />
             ))}
-            <div style={{ backgroundColor: "rgba(248,113,113,0.06)", border: "1px solid rgba(248,113,113,0.15)" }}
-              className="rounded-lg px-3 py-2 mt-3 flex justify-between">
-              <span className="text-gray-400 text-xs">Monthly fixed total</span>
-              <span style={{ color: "#F87171" }} className="text-xs font-bold">{fmt(fixedTotal)}</span>
-            </div>
           </div>
         )}
-      </SectionCard>
+      </div>
 
       {/* Salaries */}
-      <SectionCard
-        title="Salaries"
-        subtitle="Coach payments for this month"
-        total={salaryTotal}
-        color="#A78BFA"
-        showForm={showSalary}
-        onToggle={() => setShowSalary(f => !f)}
-        form={showSalary && (
+      <div style={card} className="rounded-2xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <p className="text-white font-semibold text-sm">Salaries</p>
+            <p className="text-gray-500 text-xs mt-0.5">Coach payments for this month</p>
+          </div>
+          <div className="flex items-center gap-3">
+            {salaryTotal > 0 && <span style={{ color: "#A78BFA" }} className="text-sm font-bold">{fmt(salaryTotal)}</span>}
+            <button onClick={() => setShowSalary(f => !f)}
+              style={showSalary ? btnOutline : btnPrimary}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+              {showSalary ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
+            </button>
+          </div>
+        </div>
+
+        {showSalary && (
           <div style={{ backgroundColor: "#0A1628", border: "1px solid rgba(167,139,250,0.15)" }}
             className="rounded-xl p-4 mb-4 space-y-3">
             <div className="grid grid-cols-2 gap-3">
@@ -702,7 +746,7 @@ function ExpensesTab({ month }) {
             </button>
           </div>
         )}
-      >
+
         {loading ? (
           <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-gray-500" /></div>
         ) : salaries.length === 0 ? (
@@ -717,59 +761,10 @@ function ExpensesTab({ month }) {
             ))}
           </div>
         )}
-      </SectionCard>
+      </div>
 
-      {/* Variable expenses */}
-      <SectionCard
-        title="Variable Expenses"
-        subtitle="One-off costs this month (equipment, travel, etc)"
-        total={variableTotal}
-        color="#FCD34D"
-        showForm={showVariable}
-        onToggle={() => setShowVariable(f => !f)}
-        form={showVariable && (
-          <div style={{ backgroundColor: "#0A1628", border: "1px solid rgba(251,191,36,0.15)" }}
-            className="rounded-xl p-4 mb-4 space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Title</label>
-                <input style={input} className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  placeholder="e.g. Equipment purchase" value={varForm.title}
-                  onChange={e => setVarForm(f => ({ ...f, title: e.target.value }))} />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1 block">Amount (LKR)</label>
-                <input style={input} type="number" className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  placeholder="0.00" value={varForm.amount}
-                  onChange={e => setVarForm(f => ({ ...f, amount: e.target.value }))} />
-              </div>
-            </div>
-            <div>
-              <label className="text-xs text-gray-400 mb-1 block">Notes (optional)</label>
-              <input style={input} className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                placeholder="Any details..." value={varForm.notes}
-                onChange={e => setVarForm(f => ({ ...f, notes: e.target.value }))} />
-            </div>
-            <button onClick={addVariable} style={btnPrimary}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold hover:opacity-90 transition-all">
-              <Check size={13} /> Add Expense
-            </button>
-          </div>
-        )}
-      >
-        {loading ? (
-          <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-gray-500" /></div>
-        ) : variable.length === 0 ? (
-          <p className="text-gray-600 text-sm text-center py-4">No variable expenses this month</p>
-        ) : (
-          <div>
-            {variable.map(x => (
-              <ExpenseRow key={x.id} item={x} amountColor="#FCD34D"
-                onDelete={async (id) => { await deleteVariableExp(id); setVariable(v => v.filter(i => i.id !== id)); }} />
-            ))}
-          </div>
-        )}
-      </SectionCard>
+      {/* Bottom expense feed */}
+      <ExpenseFeed expenses={expenses} salaries={salaries} />
     </div>
   );
 }
