@@ -48,9 +48,16 @@ function formatWeekLabel(monday) {
   return `${fmt(monday)} - ${fmt(sunday)}`;
 }
 
+function isWeekend(dateStr) {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay();
+  return day === 0 || day === 6;
+}
+
 function AvailabilitySection({ coachId }) {
   const [monday, setMonday]          = useState(getMondayOfWeek(new Date()));
-  const [selectedDates, setSelected] = useState([]);
+  const [selectedDates, setSelected] = useState([]);          // weekday full-day dates
+  const [weekendSlots, setWeekendSlots] = useState([]);       // [{date, slot}]
   const [notes, setNotes]            = useState("");
   const [loading, setLoading]        = useState(false);
   const [saving, setSaving]          = useState(false);
@@ -67,9 +74,11 @@ function AvailabilitySection({ coachId }) {
     try {
       const res = await getCoachAvailability(coachId, weekStart);
       setSelected(res.data.dates || []);
+      setWeekendSlots(res.data.weekend_slots || []);
       setNotes(res.data.notes   || "");
     } catch (e) {
       setSelected([]);
+      setWeekendSlots([]);
       setNotes("");
     }
     setLoading(false);
@@ -87,6 +96,17 @@ function AvailabilitySection({ coachId }) {
     setSaved(false);
   };
 
+  const toggleWeekendSlot = (dateStr, slot) => {
+    setWeekendSlots(ws => {
+      const exists = ws.find(w => w.date === dateStr && w.slot === slot);
+      if (exists) return ws.filter(w => !(w.date === dateStr && w.slot === slot));
+      return [...ws, { date: dateStr, slot }];
+    });
+    setSaved(false);
+  };
+
+  const hasSlot = (dateStr, slot) => weekendSlots.some(w => w.date === dateStr && w.slot === slot);
+
   const handleSubmit = async () => {
     setError("");
 
@@ -98,10 +118,11 @@ function AvailabilitySection({ coachId }) {
     setSaving(true);
     try {
       await submitAvailability({
-        coach_id:   coachId,
-        dates:      selectedDates,
-        week_start: weekStart,
-        notes:      notes || null,
+        coach_id:      coachId,
+        dates:         selectedDates,
+        weekend_slots: weekendSlots,
+        week_start:    weekStart,
+        notes:         notes || null,
       });
       setSaved(true);
     } catch (e) {
@@ -142,6 +163,8 @@ function AvailabilitySection({ coachId }) {
     );
   }
 
+  const totalSelected = selectedDates.length + weekendSlots.length;
+
   return (
     <div style={card} className="rounded-2xl p-5 sm:p-6">
       <div className="flex items-center gap-3 mb-5">
@@ -151,7 +174,7 @@ function AvailabilitySection({ coachId }) {
         </div>
         <div>
           <p className="text-white font-semibold">Weekly Availability</p>
-          <p className="text-gray-500 text-xs mt-0.5">Select the days you can coach this week</p>
+          <p className="text-gray-500 text-xs mt-0.5">Weekdays: full day · Weekends: morning / afternoon</p>
         </div>
       </div>
 
@@ -184,9 +207,37 @@ function AvailabilitySection({ coachId }) {
           <div className="grid grid-cols-7 gap-2 mb-5">
             {weekDates.map((date, i) => {
               const dateStr  = toDateStr(date);
+              const weekend  = isWeekend(dateStr);
               const selected = selectedDates.includes(dateStr);
               const isToday  = dateStr === todayStr;
               const isPast   = dateStr < todayStr;
+              const amOn = hasSlot(dateStr, "morning");
+              const pmOn = hasSlot(dateStr, "afternoon");
+
+              if (weekend) {
+                return (
+                  <div key={dateStr}
+                    style={{ backgroundColor: "#0A1628", border: isToday ? "1px solid rgba(0,229,204,0.5)" : "1px solid rgba(255,255,255,0.08)" }}
+                    className="rounded-xl p-2 flex flex-col items-center gap-1.5">
+                    <span className="text-xs font-bold uppercase tracking-wide" style={{ color: "#00E5CC" }}>{DAYS[i]}</span>
+                    <span className="text-base font-bold text-white">{date.getDate()}</span>
+                    <button disabled={isPast} onClick={() => toggleWeekendSlot(dateStr, "morning")}
+                      style={amOn
+                        ? { backgroundColor: "#00E5CC", color: "#080F1E" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                      className="w-full text-[10px] font-bold py-1 rounded-md disabled:opacity-30 disabled:cursor-not-allowed">
+                      AM
+                    </button>
+                    <button disabled={isPast} onClick={() => toggleWeekendSlot(dateStr, "afternoon")}
+                      style={pmOn
+                        ? { backgroundColor: "#00E5CC", color: "#080F1E" }
+                        : { backgroundColor: "rgba(255,255,255,0.05)", color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                      className="w-full text-[10px] font-bold py-1 rounded-md disabled:opacity-30 disabled:cursor-not-allowed">
+                      PM
+                    </button>
+                  </div>
+                );
+              }
 
               return (
                 <button
@@ -226,13 +277,11 @@ function AvailabilitySection({ coachId }) {
           </div>
 
           {/* Selected summary */}
-          {selectedDates.length > 0 ? (
+          {totalSelected > 0 ? (
             <div style={{ backgroundColor: "rgba(0,229,204,0.06)", border: "1px solid rgba(0,229,204,0.15)" }}
               className="rounded-xl p-3 mb-4">
               <p className="text-xs text-gray-400 mb-2">
-                Available <span style={{ color: "#00E5CC" }} className="font-semibold">
-                  {selectedDates.length} day{selectedDates.length !== 1 ? "s" : ""}
-                </span> this week
+                Available <span style={{ color: "#00E5CC" }} className="font-semibold">{totalSelected} slot{totalSelected !== 1 ? "s" : ""}</span> this week
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {[...selectedDates].sort().map(d => {
@@ -245,6 +294,16 @@ function AvailabilitySection({ coachId }) {
                     </span>
                   );
                 })}
+                {[...weekendSlots].sort((a,b) => a.date.localeCompare(b.date)).map(w => {
+                  const date = new Date(w.date + "T00:00:00");
+                  return (
+                    <span key={`${w.date}-${w.slot}`}
+                      style={{ backgroundColor: "rgba(0,229,204,0.12)", color: "#00E5CC" }}
+                      className="text-xs px-2.5 py-1 rounded-full font-medium capitalize">
+                      {date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {w.slot}
+                    </span>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -252,7 +311,7 @@ function AvailabilitySection({ coachId }) {
               className="rounded-xl p-4 mb-4 text-center">
               <Clock size={18} className="mx-auto mb-1.5 text-gray-600" />
               <p className="text-gray-500 text-sm">No days selected</p>
-              <p className="text-gray-600 text-xs mt-0.5">Tap the days above you are available</p>
+              <p className="text-gray-600 text-xs mt-0.5">Tap weekdays for full-day, or AM/PM for weekends</p>
             </div>
           )}
 
