@@ -40,19 +40,8 @@ const getWeekAvailability = (week_start) =>
 const getCoachAvailability = (coach_id, week_start) =>
   api.get(`/availability/coach/${coach_id}?week_start=${week_start}`);
 
-const AGE_GROUPS = [
-  "U6",
-  "U7",
-  "U8",
-  "U9",
-  "U10",
-  "U11",
-  "U12",
-  "U13",
-  "U14",
-  "U15",
-  "U16",
-];
+const AGE_GROUPS = ["U7", "U13", "U12_DEV", "U13_GIRLS"];
+const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ── Date helpers ──────────────────────────────────────────────────────────────
@@ -728,7 +717,7 @@ export default function Coaches() {
                     }
                     className="px-3 py-1 rounded-lg text-xs font-semibold transition-all hover:border-cyan-500/40"
                   >
-                    {g}
+                    {AGE_GROUP_LABELS[g]}
                   </button>
                 ))}
               </div>
@@ -839,7 +828,7 @@ export default function Coaches() {
                       }}
                       className="px-2 py-0.5 rounded-lg text-xs font-medium"
                     >
-                      {g}
+                      {AGE_GROUP_LABELS[g] || g}
                     </span>
                   ))}
                 </div>
