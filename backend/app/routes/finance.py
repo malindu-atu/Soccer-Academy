@@ -19,16 +19,12 @@ class OtherIncomeCreate(BaseModel):
     category: str = "sponsor"
     notes: Optional[str] = None
 
-class FixedExpenseCreate(BaseModel):
-    title: str
-    amount: float
-
-class VariableExpenseCreate(BaseModel):
+class ExpenseCreate(BaseModel):
     title: str
     amount: float
     month: str
     notes: Optional[str] = None
-
+    
 class SalaryCreate(BaseModel):
     coach_id: str
     amount: float
@@ -191,38 +187,21 @@ def delete_other_income(id: str):
     supabase.table("other_income").delete().eq("id", id).execute()
     return {"message": "Deleted"}
 
-# ── Fixed expenses ────────────────────────────────────────────────────────────
+# ── Expenses ──────────────────────────────────────────────────────────────────
 
-@router.get("/fixed-expenses")
-def get_fixed_expenses():
-    res = supabase.table("fixed_expenses").select("*").eq("is_active", True).order("created_at").execute()
+@router.get("/expenses")
+def get_expenses(month: str = Query(...)):
+    res = supabase.table("expenses").select("*").eq("month", month).order("created_at", desc=True).execute()
     return res.data
 
-@router.post("/fixed-expenses")
-def create_fixed_expense(data: FixedExpenseCreate):
-    res = supabase.table("fixed_expenses").insert(data.dict()).execute()
+@router.post("/expenses")
+def create_expense(data: ExpenseCreate):
+    res = supabase.table("expenses").insert(data.dict()).execute()
     return res.data[0]
 
-@router.delete("/fixed-expenses/{id}")
-def delete_fixed_expense(id: str):
-    supabase.table("fixed_expenses").update({"is_active": False}).eq("id", id).execute()
-    return {"message": "Deleted"}
-
-# ── Variable expenses ─────────────────────────────────────────────────────────
-
-@router.get("/variable-expenses")
-def get_variable_expenses(month: str = Query(...)):
-    res = supabase.table("variable_expenses").select("*").eq("month", month).order("created_at").execute()
-    return res.data
-
-@router.post("/variable-expenses")
-def create_variable_expense(data: VariableExpenseCreate):
-    res = supabase.table("variable_expenses").insert(data.dict()).execute()
-    return res.data[0]
-
-@router.delete("/variable-expenses/{id}")
-def delete_variable_expense(id: str):
-    supabase.table("variable_expenses").delete().eq("id", id).execute()
+@router.delete("/expenses/{id}")
+def delete_expense(id: str):
+    supabase.table("expenses").delete().eq("id", id).execute()
     return {"message": "Deleted"}
 
 # ── Salaries ──────────────────────────────────────────────────────────────────
@@ -257,20 +236,16 @@ def get_monthly_summary(month: str):
     other_res    = supabase.table("other_income").select("amount").eq("month", month).execute()
     other_income = sum(r["amount"] for r in other_res.data)
 
-    # Fixed expenses (always apply)
-    fixed_res      = supabase.table("fixed_expenses").select("amount").eq("is_active", True).execute()
-    fixed_total    = sum(r["amount"] for r in fixed_res.data)
-
-    # Variable expenses
-    variable_res   = supabase.table("variable_expenses").select("amount").eq("month", month).execute()
-    variable_total = sum(r["amount"] for r in variable_res.data)
+   # Expenses
+    expenses_res   = supabase.table("expenses").select("amount").eq("month", month).execute()
+    expenses_total = sum(r["amount"] for r in expenses_res.data)
 
     # Salaries
     salary_res     = supabase.table("salary_expenses").select("amount").eq("month", month).execute()
     salary_total   = sum(r["amount"] for r in salary_res.data)
 
     total_income   = student_income + other_income
-    total_expenses = fixed_total + variable_total + salary_total
+    total_expenses = expenses_total + salary_total
     net            = total_income - total_expenses
 
     return {
@@ -278,8 +253,7 @@ def get_monthly_summary(month: str):
         "student_income":  student_income,
         "other_income":    other_income,
         "total_income":    total_income,
-        "fixed_expenses":  fixed_total,
-        "variable_expenses": variable_total,
+        "expenses":        expenses_total,
         "salary_expenses": salary_total,
         "total_expenses":  total_expenses,
         "net":             net,
