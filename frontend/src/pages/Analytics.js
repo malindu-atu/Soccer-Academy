@@ -178,12 +178,11 @@ function PlayerAnalytics({ kids, locations }) {
 
       {stats && !loading && (
         <div>
-          <div className="grid grid-cols-5 gap-3 mb-6">
+          <div className="grid grid-cols-4 gap-3 mb-6">
             <StatCard value={`${stats.attendance_rate}%`} label="Attendance Rate" color={rateColor(stats.attendance_rate)} />
             <StatCard value={stats.total_sessions} label="Total Sessions" color="#9CA3AF" />
             <StatCard value={stats.present} label="Present" color="#00E5CC" />
             <StatCard value={stats.absent || 0} label="Absent" color="#F87171" />
-            <StatCard value={stats.late || 0} label="Late" color="#FCD34D" />
           </div>
 
           <div className="grid grid-cols-2 gap-6 mb-6">
@@ -208,16 +207,14 @@ function PlayerAnalytics({ kids, locations }) {
               <p className="text-xs text-gray-400 uppercase tracking-wider mb-4">Status Breakdown</p>
               <ResponsiveContainer width="100%" height={180}>
                 <PieChart>
-                  <Pie
+                <Pie
                     data={[
                       { name: "Present", value: stats.present },
-                      { name: "Absent", value: stats.absent || 0 },
-                      { name: "Late", value: stats.late || 0 }
+                      { name: "Absent", value: stats.absent || 0 }
                     ]}
                     cx="50%" cy="50%" innerRadius={50} outerRadius={75} dataKey="value" paddingAngle={3}>
                     <Cell fill="#00E5CC" />
                     <Cell fill="#F87171" />
-                    <Cell fill="#FCD34D" />
                   </Pie>
                   <Tooltip content={<CustomTooltip />} />
                   <Legend iconType="circle" iconSize={8}
