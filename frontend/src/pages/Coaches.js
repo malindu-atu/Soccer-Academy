@@ -308,6 +308,7 @@ function WeeklyAvailabilityGrid({ coaches }) {
 function CoachAvailabilityPanel({ coach, onClose }) {
   const [monday, setMonday] = useState(getMondayOfWeek(new Date()));
   const [dates, setDates] = useState([]);
+  const [weekendSlots, setWeekendSlots] = useState([]);
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -319,9 +320,11 @@ function CoachAvailabilityPanel({ coach, onClose }) {
     try {
       const res = await getCoachAvailability(coach.id, weekStart);
       setDates(res.data.dates || []);
+      setWeekendSlots(res.data.weekend_slots || []);
       setNotes(res.data.notes || "");
     } catch (e) {
       setDates([]);
+      setWeekendSlots([]);
       setNotes("");
     }
     setLoading(false);
@@ -445,36 +448,46 @@ function CoachAvailabilityPanel({ coach, onClose }) {
             <div className="grid grid-cols-7 gap-2 mb-4">
               {weekDates.map((date, i) => {
                 const dateStr = toDateStr(date);
+                const day = date.getDay();
+                const weekend = day === 0 || day === 6;
                 const avail = dates.includes(dateStr);
+                const amOn = weekendSlots.some(w => w.date === dateStr && w.slot === "morning");
+                const pmOn = weekendSlots.some(w => w.date === dateStr && w.slot === "afternoon");
+
+                if (weekend) {
+                  return (
+                    <div key={dateStr}
+                      style={{ backgroundColor: "#0A1628", border: "1px solid rgba(255,255,255,0.06)" }}
+                      className="rounded-xl p-2 flex flex-col items-center gap-1">
+                      <span className="text-xs font-bold uppercase tracking-wider" style={{ color: "#00E5CC" }}>{DAYS[i]}</span>
+                      <span className="font-bold text-sm text-white">{date.getDate()}</span>
+                      <span style={amOn
+                          ? { backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }
+                          : { backgroundColor: "rgba(255,255,255,0.04)", color: "#4B5563" }}
+                        className="text-[10px] font-bold w-full text-center py-0.5 rounded">AM</span>
+                      <span style={pmOn
+                          ? { backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }
+                          : { backgroundColor: "rgba(255,255,255,0.04)", color: "#4B5563" }}
+                        className="text-[10px] font-bold w-full text-center py-0.5 rounded">PM</span>
+                    </div>
+                  );
+                }
+
                 return (
                   <div
                     key={dateStr}
                     style={
                       avail
-                        ? {
-                            backgroundColor: "rgba(0,229,204,0.12)",
-                            border: "2px solid rgba(0,229,204,0.4)",
-                          }
-                        : {
-                            backgroundColor: "#0A1628",
-                            border: "1px solid rgba(255,255,255,0.06)",
-                          }
+                        ? { backgroundColor: "rgba(0,229,204,0.12)", border: "2px solid rgba(0,229,204,0.4)" }
+                        : { backgroundColor: "#0A1628", border: "1px solid rgba(255,255,255,0.06)" }
                     }
                     className="rounded-xl p-2.5 flex flex-col items-center gap-1"
                   >
-                    <span
-                      className="text-xs font-bold uppercase tracking-wider"
-                      style={{
-                        color:
-                          i >= 5 ? "#00E5CC" : avail ? "#00E5CC" : "#6B7280",
-                      }}
-                    >
+                    <span className="text-xs font-bold uppercase tracking-wider"
+                      style={{ color: avail ? "#00E5CC" : "#6B7280" }}>
                       {DAYS[i]}
                     </span>
-                    <span
-                      className="font-bold text-sm"
-                      style={{ color: avail ? "#00E5CC" : "#9CA3AF" }}
-                    >
+                    <span className="font-bold text-sm" style={{ color: avail ? "#00E5CC" : "#9CA3AF" }}>
                       {date.getDate()}
                     </span>
                     {avail ? (
@@ -488,7 +501,7 @@ function CoachAvailabilityPanel({ coach, onClose }) {
             </div>
 
             {/* Summary */}
-            {dates.length > 0 ? (
+            {(dates.length > 0 || weekendSlots.length > 0) ? (
               <div
                 style={{
                   backgroundColor: "rgba(0,229,204,0.06)",
@@ -502,7 +515,7 @@ function CoachAvailabilityPanel({ coach, onClose }) {
                     className="text-xs font-semibold"
                     style={{ color: "#00E5CC" }}
                   >
-                    Available {dates.length} day{dates.length !== 1 ? "s" : ""}{" "}
+                    Available {dates.length + weekendSlots.length} slot{(dates.length + weekendSlots.length) !== 1 ? "s" : ""}{" "}
                     this week
                   </p>
                 </div>
@@ -523,6 +536,18 @@ function CoachAvailabilityPanel({ coach, onClose }) {
                           month: "short",
                           day: "numeric",
                         })}
+                      </span>
+                    );
+                  })}
+                  {[...weekendSlots].sort((a,b) => a.date.localeCompare(b.date)).map((w) => {
+                    const date = new Date(w.date + "T00:00:00");
+                    return (
+                      <span
+                        key={`${w.date}-${w.slot}`}
+                        style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }}
+                        className="text-xs px-2.5 py-1 rounded-full capitalize"
+                      >
+                        {date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · {w.slot}
                       </span>
                     );
                   })}
