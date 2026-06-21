@@ -22,13 +22,11 @@ const getHistory     = ()  => api.get("/sessions/history");
 const STATUS_STYLE = {
   present: { backgroundColor: "rgba(0,229,204,0.1)",  color: "#00E5CC" },
   absent:  { backgroundColor: "rgba(239,68,68,0.1)",  color: "#F87171" },
-  late:    { backgroundColor: "rgba(251,191,36,0.1)", color: "#FCD34D" },
 };
 
 const STATUS_ICON = {
   present: <Check size={12} />,
   absent:  <X size={12} />,
-  late:    <Clock size={12} />,
 };
 
 function formatDay(dateStr) {
@@ -84,7 +82,6 @@ function SessionCard({ s, onClick, compact = false }) {
           {[
             { k: "present", color: "#00E5CC", bg: "rgba(0,229,204,0.08)" },
             { k: "absent",  color: "#F87171", bg: "rgba(239,68,68,0.08)" },
-            { k: "late",    color: "#FCD34D", bg: "rgba(251,191,36,0.08)" },
           ].map(({ k, color, bg }) => counts[k] > 0 && (
             <span key={k} style={{ backgroundColor: bg, color }}
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold">
@@ -335,10 +332,8 @@ export default function Attendance() {
     ? (selectedSession.session_templates?.session_enrollments?.map(e => e.kids).filter(Boolean) || [])
     : [];
 
-  const present = Object.values(attendance).filter(v => v === "present").length + walkIns.filter(w => w.status === "present").length;
-  const absent  = Object.values(attendance).filter(v => v === "absent").length  + walkIns.filter(w => w.status === "absent").length;
-  const late    = Object.values(attendance).filter(v => v === "late").length    + walkIns.filter(w => w.status === "late").length;
-
+    const present = Object.values(attendance).filter(v => v === "present").length + walkIns.filter(w => w.status === "present").length;
+    const absent  = Object.values(attendance).filter(v => v === "absent").length  + walkIns.filter(w => w.status === "absent").length;
   const walkInSuggestions = walkInSearch.length > 1
     ? allKids.filter(k =>
         k.name.toLowerCase().includes(walkInSearch.toLowerCase()) &&
@@ -381,10 +376,9 @@ export default function Attendance() {
 
           {/* Summary pills */}
           <div className="p-4 flex gap-2 flex-wrap" style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            {[
+          {[
               { label: "Present", count: present, color: "#00E5CC", bg: "rgba(0,229,204,0.1)", icon: <Check size={12} /> },
               { label: "Absent",  count: absent,  color: "#F87171", bg: "rgba(239,68,68,0.1)", icon: <X size={12} /> },
-              { label: "Late",    count: late,    color: "#FCD34D", bg: "rgba(251,191,36,0.1)", icon: <Clock size={12} /> },
             ].map(s => (
               <div key={s.label} style={{ backgroundColor: s.bg }}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl">
@@ -421,7 +415,7 @@ export default function Attendance() {
                     disabled={done}>
                     <option value="present" style={{ backgroundColor: "#0D1F3C", color: "white" }}>Present</option>
                     <option value="absent"  style={{ backgroundColor: "#0D1F3C", color: "white" }}>Absent</option>
-                    <option value="late"    style={{ backgroundColor: "#0D1F3C", color: "white" }}>Late</option>
+    
                   </select>
                 </div>
               ))}
@@ -496,7 +490,7 @@ export default function Attendance() {
                       disabled={done}>
                       <option value="present" style={{ backgroundColor: "#0D1F3C", color: "white" }}>Present</option>
                       <option value="absent"  style={{ backgroundColor: "#0D1F3C", color: "white" }}>Absent</option>
-                      <option value="late"    style={{ backgroundColor: "#0D1F3C", color: "white" }}>Late</option>
+                     
                     </select>
                     {!done && (
                       <button onClick={() => setWalkIns(ws => ws.filter((_, j) => j !== i))}
