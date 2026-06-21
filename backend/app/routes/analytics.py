@@ -194,7 +194,7 @@ def retention_analytics():
     for k in active:
         active_by_group[k["age_group"]] += 1
 
-    order = ["U7", "U10", "U13", "U16"]
+    order = ["U7", "U12_DEV", "U13", "U13_GIRLS"]
     funnel = [{"age_group": ag, "active": active_by_group.get(ag, 0)} for ag in order]
 
     return {
