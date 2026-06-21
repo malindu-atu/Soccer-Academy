@@ -47,7 +47,6 @@ function fmt(n) {
 const STATUS_CFG = {
   paid:   { color: "#00E5CC", bg: "rgba(0,229,204,0.12)",  label: "Paid",   icon: "✓" },
   unpaid: { color: "#F87171", bg: "rgba(239,68,68,0.12)",  label: "Unpaid", icon: "✕" },
-  waived: { color: "#FCD34D", bg: "rgba(251,191,36,0.12)", label: "Waived", icon: "~" },
 };
 
 // ── Month navigator ───────────────────────────────────────────────────────────
@@ -123,18 +122,153 @@ function SummaryCards({ summary }) {
 }
 
 // ── Income tab ────────────────────────────────────────────────────────────────
+
+// ── Rates drawer ──────────────────────────────────────────────────────────────
+function RatesDrawer({ onClose }) {
+  const [rates, setRates] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState({});
+  const [editValues, setEditValues] = useState({});
+
+  useEffect(() => {
+    getRates().then(r => {
+      setRates(r.data);
+      const init = {};
+      r.data.forEach(x => { init[x.age_group] = x.rate_per_session; });
+      setEditValues(init);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  const save = async (ag) => {
+    setSaving(s => ({ ...s, [ag]: true }));
+    try {
+      await updateRate(ag, { rate_per_session: parseFloat(editValues[ag]) || 0 });
+    } catch (e) {}
+    setSaving(s => ({ ...s, [ag]: false }));
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      style={{ backgroundColor: "rgba(0,0,0,0.75)" }} onClick={onClose}>
+      <div style={{ backgroundColor: "#0D1F3C", border: "1px solid rgba(0,229,204,0.25)", maxWidth: 420, width: "100%" }}
+        className="rounded-2xl p-6 shadow-2xl max-h-[80vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-5">
+          <p className="text-white font-semibold">Rate per Session (by Age Group)</p>
+          <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-8"><Loader2 size={16} className="animate-spin text-gray-500" /></div>
+        ) : (
+          <div className="space-y-2">
+            {rates.map(r => (
+              <div key={r.age_group} className="flex items-center gap-2">
+                <span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold w-12 text-center">{r.age_group}</span>
+                <input style={input} type="number"
+                  className="flex-1 rounded-lg p-2 text-sm focus:outline-none"
+                  value={editValues[r.age_group] ?? ""}
+                  onChange={e => setEditValues(v => ({ ...v, [r.age_group]: e.target.value }))} />
+                <button onClick={() => save(r.age_group)} disabled={saving[r.age_group]}
+                  style={btnPrimary} className="px-3 py-2 rounded-lg text-xs font-semibold">
+                  {saving[r.age_group] ? "..." : "Save"}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Income feed (students + other income, filterable) ─────────────────────────
+function IncomeFeed({ month, studentPayments, otherIncome, refreshKey }) {
+  const [typeFilter, setTypeFilter] = useState(""); // "" | "student" | "other"
+
+  const studentEntries = studentPayments
+    .filter(k => k.payment?.status === "paid")
+    .map(k => ({
+      id: `student-${k.id}`,
+      type: "student",
+      title: k.name,
+      subtitle: `${k.age_group} · Student Fee`,
+      amount: k.payment.display_amount,
+      updated_at: k.payment.updated_at,
+    }));
+
+  const otherEntries = otherIncome.map(o => ({
+    id: `other-${o.id}`,
+    type: "other",
+    title: o.title,
+    subtitle: o.category,
+    amount: o.amount,
+    updated_at: o.created_at,
+  }));
+
+  const combined = [...studentEntries, ...otherEntries]
+    .filter(e => !typeFilter || e.type === typeFilter)
+    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+
+  const total = combined.reduce((s, e) => s + (e.amount || 0), 0);
+
+  return (
+    <div style={card} className="rounded-2xl p-4">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+        <div>
+          <p className="text-white font-semibold text-sm">Income This Month</p>
+          <p className="text-gray-500 text-xs mt-0.5">{combined.length} entries</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <span style={{ color: "#00E5CC" }} className="text-sm font-bold">{fmt(total)}</span>
+          <select style={{ ...input, backgroundImage: "none" }}
+            className="rounded-lg px-3 py-1.5 text-xs focus:outline-none"
+            value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
+            <option value="" style={{ backgroundColor: "#0D1F3C" }}>All</option>
+            <option value="student" style={{ backgroundColor: "#0D1F3C" }}>Student Fees</option>
+            <option value="other" style={{ backgroundColor: "#0D1F3C" }}>Other Income</option>
+          </select>
+        </div>
+      </div>
+      {combined.length === 0 ? (
+        <p className="text-gray-600 text-sm text-center py-6">No income recorded yet this month</p>
+      ) : (
+        <div className="space-y-2 max-h-72 overflow-y-auto">
+          {combined.map(e => (
+            <div key={e.id} className="flex items-center gap-3 py-2"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={e.type === "student"
+                  ? { backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }
+                  : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
+                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0 capitalize">{e.type === "student" ? "Fee" : "Other"}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-white text-sm truncate">{e.title}</p>
+                <p className="text-gray-500 text-xs truncate">{e.subtitle}</p>
+              </div>
+              <p style={{ color: "#00E5CC" }} className="text-sm font-semibold flex-shrink-0">{fmt(e.amount)}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Income tab ────────────────────────────────────────────────────────────────
 function IncomeTab({ month }) {
   const [locations, setLocations]     = useState([]);
   const [selectedLoc, setSelectedLoc] = useState("");
+  const [ageFilter, setAgeFilter]     = useState("");
+  const [search, setSearch]           = useState("");
   const [kids, setKids]               = useState([]);
   const [paymentMap, setPaymentMap]   = useState({});
-  const [paymentSummary, setPS]       = useState(null);
   const [saving, setSaving]           = useState({});
-  const [search, setSearch]           = useState("");
+  const [amountDrafts, setAmountDrafts] = useState({});
   const [otherIncome, setOtherIncome] = useState([]);
   const [showOtherForm, setShowOther] = useState(false);
   const [otherForm, setOtherForm]     = useState({ title: "", amount: "", category: "sponsor", notes: "" });
   const [loading, setLoading]         = useState(false);
+  const [showRates, setShowRates]     = useState(false);
 
   useEffect(() => {
     getLocations().then(r => setLocations(r.data)).catch(() => {});
@@ -143,33 +277,53 @@ function IncomeTab({ month }) {
   const loadPayments = useCallback(async () => {
     setLoading(true);
     try {
-      const [pRes, psRes, oRes] = await Promise.all([
-        getPayments(month, selectedLoc),
-        getPaymentSummary(month, selectedLoc),
+      const params = {};
+      if (selectedLoc) params.location_id = selectedLoc;
+      if (ageFilter) params.age_group = ageFilter;
+      if (search) params.search = search;
+      const [pRes, oRes] = await Promise.all([
+        getPayments(month, params),
         getOtherIncome(month),
       ]);
       setKids(pRes.data.kids || []);
       setPaymentMap(pRes.data.payment_map || {});
-      setPS(psRes.data);
       setOtherIncome(oRes.data);
     } catch (e) { console.error(e); }
     setLoading(false);
-  }, [month, selectedLoc]);
+  }, [month, selectedLoc, ageFilter, search]);
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
 
-  const cycleStatus = async (kid) => {
-    const current = paymentMap[kid.id]?.status || "unpaid";
-    const next    = current === "unpaid" ? "paid" : current === "paid" ? "waived" : "unpaid";
+  const toggleStatus = async (kid) => {
+    const p = paymentMap[kid.id] || {};
+    const current = p.status || "unpaid";
+    const next = current === "unpaid" ? "paid" : "unpaid";
+    const amount = amountDrafts[kid.id] !== undefined ? parseFloat(amountDrafts[kid.id]) : (p.display_amount ?? kid.calculated_amount);
     setSaving(s => ({ ...s, [kid.id]: true }));
     try {
       const res = await upsertPayment({
         kid_id: kid.id, month, status: next,
-        amount: paymentMap[kid.id]?.amount || null,
-        note:   paymentMap[kid.id]?.note   || null,
+        amount, note: p.note || null,
+        is_manual_amount: p.is_manual_amount || amountDrafts[kid.id] !== undefined,
       });
-      setPaymentMap(m => ({ ...m, [kid.id]: res.data }));
-      getPaymentSummary(month, selectedLoc).then(r => setPS(r.data));
+      setPaymentMap(m => ({ ...m, [kid.id]: { ...res, display_amount: res.amount } }));
+    } catch (e) {}
+    setSaving(s => ({ ...s, [kid.id]: false }));
+  };
+
+  const saveAmount = async (kid) => {
+    const draft = amountDrafts[kid.id];
+    if (draft === undefined) return;
+    const p = paymentMap[kid.id] || {};
+    setSaving(s => ({ ...s, [kid.id]: true }));
+    try {
+      const res = await upsertPayment({
+        kid_id: kid.id, month, status: p.status || "unpaid",
+        amount: parseFloat(draft) || 0, note: p.note || null,
+        is_manual_amount: true,
+      });
+      setPaymentMap(m => ({ ...m, [kid.id]: { ...res, display_amount: res.amount } }));
+      setAmountDrafts(d => { const c = { ...d }; delete c[kid.id]; return c; });
     } catch (e) {}
     setSaving(s => ({ ...s, [kid.id]: false }));
   };
@@ -189,101 +343,65 @@ function IncomeTab({ month }) {
     setOtherIncome(o => o.filter(x => x.id !== id));
   };
 
-  const filteredKids = kids.filter(k =>
-    !search || k.name.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const collectionRate = paymentSummary?.collection_rate ?? 0;
-  const rateColor      = collectionRate >= 80 ? "#00E5CC" : collectionRate >= 50 ? "#FCD34D" : "#F87171";
-  const otherTotal     = otherIncome.reduce((s, o) => s + (o.amount || 0), 0);
+  const kidsWithPayment = kids.map(k => ({ ...k, payment: paymentMap[k.id] || { display_amount: k.calculated_amount, status: "unpaid" } }));
 
   return (
     <div className="space-y-5">
-      {/* Location selector */}
+      {/* Filters + rates */}
       <div style={card} className="rounded-2xl p-4">
-        <div className="flex items-center gap-2 mb-3">
-          <MapPin size={14} style={{ color: "#00E5CC" }} />
-          <p className="text-white font-semibold text-sm">Student Fees by Location</p>
-        </div>
-        <div className="flex gap-2 flex-wrap mb-4">
-          <button onClick={() => setSelectedLoc("")}
-            style={!selectedLoc
-              ? { backgroundColor: "#00E5CC", color: "#0A1628" }
-              : { backgroundColor: "rgba(0,229,204,0.08)", color: "#00E5CC", border: "1px solid rgba(0,229,204,0.3)" }}
-            className="px-4 py-1.5 rounded-full text-xs font-semibold transition-all">
-            All Locations
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-white font-semibold text-sm">Student Fees</p>
+          <button onClick={() => setShowRates(true)} style={btnOutline}
+            className="px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+            Edit Rates
           </button>
-          {locations.map(l => (
-            <button key={l.id} onClick={() => setSelectedLoc(l.id)}
-              style={selectedLoc === l.id
-                ? { backgroundColor: "#00E5CC", color: "#0A1628" }
-                : { backgroundColor: "rgba(0,229,204,0.08)", color: "#00E5CC", border: "1px solid rgba(0,229,204,0.3)" }}
-              className="px-4 py-1.5 rounded-full text-xs font-semibold transition-all">
-              {l.name}
-            </button>
-          ))}
         </div>
+        <StudentFilter
+          search={search} onSearch={setSearch}
+          ageFilter={ageFilter} onAge={setAgeFilter}
+          locationFilter={selectedLoc} onLocation={setSelectedLoc}
+          locations={locations}
+          resultCount={kids.length}
+        />
 
-        {/* Payment summary */}
-        {paymentSummary && (
-          <div className="grid grid-cols-4 gap-2 mb-4">
-            {[
-              { label: "Total",   value: paymentSummary.total,  color: "#9CA3AF" },
-              { label: "Paid",    value: paymentSummary.paid,   color: "#00E5CC" },
-              { label: "Unpaid",  value: paymentSummary.unpaid, color: "#F87171" },
-              { label: "Rate",    value: `${collectionRate}%`,  color: rateColor  },
-            ].map(s => (
-              <div key={s.label} style={{ backgroundColor: "#0A1628", border: "1px solid rgba(255,255,255,0.06)" }}
-                className="rounded-xl p-3 text-center">
-                <p style={{ color: s.color }} className="text-xl font-bold">{s.value}</p>
-                <p className="text-gray-500 text-xs">{s.label}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Progress bar */}
-        <div style={{ backgroundColor: "rgba(255,255,255,0.06)" }} className="rounded-full h-1.5 mb-4">
-          <div style={{ width: `${collectionRate}%`, backgroundColor: rateColor, transition: "width 0.6s ease" }}
-            className="h-1.5 rounded-full" />
-        </div>
-
-        {/* Search */}
-        <div className="mb-3">
-          <input style={input}
-            className="w-full rounded-lg px-3 py-2 text-sm focus:outline-none"
-            placeholder="Search student..."
-            value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-
-        {/* Student list */}
         {loading ? (
           <div className="flex items-center justify-center gap-2 text-gray-500 text-sm py-8">
             <Loader2 size={14} className="animate-spin" style={{ color: "#00E5CC" }} /> Loading...
           </div>
         ) : (
-          <div className="divide-y divide-white/5">
-            {filteredKids.length === 0 && (
+          <div className="divide-y divide-white/5 mt-4">
+            {kidsWithPayment.length === 0 && (
               <p className="text-gray-500 text-sm text-center py-6">No students found</p>
             )}
-            {filteredKids.map(k => {
-              const p      = paymentMap[k.id];
-              const status = p?.status || "unpaid";
+            {kidsWithPayment.map(k => {
+              const status = k.payment.status || "unpaid";
+              const draft = amountDrafts[k.id];
+              const displayAmount = draft !== undefined ? draft : (k.payment.display_amount ?? k.calculated_amount);
               return (
-                <div key={k.id} className="flex items-center gap-3 py-3">
+                <div key={k.id} className="flex items-center gap-3 py-3 flex-wrap">
                   <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
                     {k.name.charAt(0)}
                   </div>
-                  <div className="flex-1 min-w-0">
+                  <div className="flex-1 min-w-[140px]">
                     <p className="text-white text-sm font-medium">{k.name}</p>
                     <p className="text-gray-500 text-xs">
-                      {k.age_group}
-                      {k.locations?.name ? ` · ${k.locations.name}` : ""}
-                      {p?.amount ? ` · LKR ${p.amount.toLocaleString()}` : ""}
+                      {k.age_group}{k.locations?.name ? ` · ${k.locations.name}` : ""}
                     </p>
                   </div>
-                  <StatusPill status={status} saving={saving[k.id]} onClick={() => cycleStatus(k)} />
+                  <div className="text-center px-3 flex-shrink-0">
+                    <p style={{ color: "#4DFFD2" }} className="text-sm font-bold">{k.sessions_attended}</p>
+                    <p className="text-gray-600 text-xs">sessions</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <span className="text-gray-500 text-xs">LKR</span>
+                    <input style={input} type="number"
+                      className="w-24 rounded-lg p-1.5 text-sm focus:outline-none"
+                      value={displayAmount}
+                      onChange={e => setAmountDrafts(d => ({ ...d, [k.id]: e.target.value }))}
+                      onBlur={() => saveAmount(k)} />
+                  </div>
+                  <StatusPill status={status} saving={saving[k.id]} onClick={() => toggleStatus(k)} />
                 </div>
               );
             })}
@@ -298,16 +416,11 @@ function IncomeTab({ month }) {
             <p className="text-white font-semibold text-sm">Other Income</p>
             <p className="text-gray-500 text-xs mt-0.5">Sponsors, donations, and other sources</p>
           </div>
-          <div className="flex items-center gap-3">
-            {otherTotal > 0 && (
-              <span style={{ color: "#00E5CC" }} className="text-sm font-bold">{fmt(otherTotal)}</span>
-            )}
-            <button onClick={() => setShowOther(f => !f)}
-              style={showOtherForm ? btnOutline : btnPrimary}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
-              {showOtherForm ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
-            </button>
-          </div>
+          <button onClick={() => setShowOther(f => !f)}
+            style={showOtherForm ? btnOutline : btnPrimary}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
+            {showOtherForm ? <><X size={12} /> Cancel</> : <><Plus size={12} /> Add</>}
+          </button>
         </div>
 
         {showOtherForm && (
@@ -371,6 +484,11 @@ function IncomeTab({ month }) {
           ))}
         </div>
       </div>
+
+      {/* Bottom income feed */}
+      <IncomeFeed month={month} studentPayments={kidsWithPayment} otherIncome={otherIncome} />
+
+      {showRates && <RatesDrawer onClose={() => setShowRates(false)} />}
     </div>
   );
 }
