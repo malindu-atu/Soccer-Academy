@@ -32,6 +32,9 @@ const deleteExpense      = (id)    => api.delete(`/finance/expenses/${id}`);
 const getSalaries        = (m)     => api.get(`/finance/salaries?month=${m}`);
 const createSalary       = (d)     => api.post("/finance/salaries", d);
 const deleteSalary       = (id)    => api.delete(`/finance/salaries/${id}`);
+
+const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toMonthStr(d) {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
@@ -164,7 +167,7 @@ function RatesDrawer({ onClose }) {
             {rates.map(r => (
               <div key={r.age_group} className="flex items-center gap-2">
                 <span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold w-12 text-center">{r.age_group}</span>
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold w-20 text-center">{AGE_GROUP_LABELS[r.age_group] || r.age_group}</span>
                 <input style={input} type="number"
                   className="flex-1 rounded-lg p-2 text-sm focus:outline-none"
                   value={editValues[r.age_group] ?? ""}
