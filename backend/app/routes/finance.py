@@ -157,15 +157,14 @@ def payment_summary(month: str, location_id: Optional[str] = Query(None)):
 
     total  = len(kid_ids)
     paid   = sum(1 for k in kid_ids if payment_map.get(k, {}).get("status") == "paid")
-    waived = sum(1 for k in kid_ids if payment_map.get(k, {}).get("status") == "waived")
-    unpaid = total - paid - waived
+    unpaid = total - paid
     total_collected = sum(
         payment_map[k]["amount"] or 0
         for k in kid_ids
         if payment_map.get(k, {}).get("status") == "paid" and payment_map.get(k, {}).get("amount")
     )
     return {
-        "total": total, "paid": paid, "waived": waived, "unpaid": unpaid,
+        "total": total, "paid": paid, "unpaid": unpaid,
         "total_collected": total_collected,
         "collection_rate": round((paid / total) * 100, 1) if total > 0 else 0
     }
