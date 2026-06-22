@@ -447,125 +447,128 @@ function IncomeTab({ month }) {
           resultCount={kids.length}
         />
 
-        {loading ? (
+{loading ? (
           <div className="flex items-center justify-center gap-2 text-gray-500 text-sm py-8">
             <Loader2 size={14} className="animate-spin" style={{ color: "#00E5CC" }} /> Loading...
           </div>
         ) : (
-          <div className="divide-y divide-white/5 mt-4">
-            {kidsWithPayment.length === 0 && (
-              <p className="text-gray-500 text-sm text-center py-6">No students found</p>
-            )}
+          <>
+            {/* Sticky column header */}
+            <div className="grid grid-cols-12 gap-2 mt-4 pb-2"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="col-span-4 text-gray-600 text-xs">Student</p>
+              <p className="col-span-2 text-gray-600 text-xs text-center">Sessions</p>
+              <p className="col-span-3 text-gray-600 text-xs text-right">Amount</p>
+              <p className="col-span-3 text-gray-600 text-xs text-right">Status</p>
+            </div>
 
-            {kidsWithPayment.map(k => {
-              const status     = k.payment.status || "unpaid";
-              const isManual   = k.payment.is_manual_amount;
-              const displayAmt = k.payment.display_amount ?? k.calculated_amount;
-              const isEditing  = editingKidId === k.id;
+            {/* Scrollable rows */}
+            <div className="overflow-y-auto" style={{ maxHeight: "480px" }}>
+              {kidsWithPayment.length === 0 && (
+                <p className="text-gray-500 text-sm text-center py-6">No students found</p>
+              )}
+              {kidsWithPayment.map(k => {
+                const status     = k.payment.status || "unpaid";
+                const isManual   = k.payment.is_manual_amount;
+                const displayAmt = k.payment.display_amount ?? k.calculated_amount;
+                const isEditing  = editingKidId === k.id;
 
-              return (
-                <div key={k.id} className="flex items-center gap-3 py-3 flex-wrap"
-                  style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+                return (
+                  <div key={k.id} className="grid grid-cols-12 gap-2 py-2.5 items-center"
+                    style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
 
-                  {/* Avatar */}
-                  <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
-                    className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
-                    {k.name.charAt(0)}
-                  </div>
+                    {/* Avatar + Name — col-span-4 */}
+                    <div className="col-span-4 flex items-center gap-2 min-w-0">
+                      <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        {k.name.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-white text-sm font-medium truncate">{k.name}</p>
+                        <p className="text-gray-500 text-xs truncate">
+                          {AGE_GROUP_LABELS[k.age_group] || k.age_group}
+                          {k.locations?.name ? ` · ${k.locations.name}` : ""}
+                        </p>
+                      </div>
+                    </div>
 
-                  {/* Name / meta */}
-                  <div className="flex-1 min-w-[120px]">
-                    <p className="text-white text-sm font-medium">{k.name}</p>
-                    <p className="text-gray-500 text-xs">
-                      {AGE_GROUP_LABELS[k.age_group] || k.age_group}
-                      {k.locations?.name ? ` · ${k.locations.name}` : ""}
-                    </p>
-                  </div>
+                    {/* Sessions — col-span-2 */}
+                    <div className="col-span-2 text-center">
+                      <p style={{ color: "#4DFFD2" }} className="text-sm font-bold">{k.sessions_attended}</p>
+                      <p className="text-gray-600 text-xs">sessions</p>
+                    </div>
 
-                  {/* Sessions attended */}
-                  <div className="text-center px-2 flex-shrink-0">
-                    <p style={{ color: "#4DFFD2" }} className="text-sm font-bold">{k.sessions_attended}</p>
-                    <p className="text-gray-600 text-xs">sessions</p>
-                  </div>
-
-                  {/* Amount — read-only or edit mode */}
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isEditing ? (
-                      <>
-                        <span className="text-gray-500 text-xs">LKR</span>
-                        <input style={input} type="number" autoFocus
-                          className="w-24 rounded-lg p-1.5 text-sm focus:outline-none"
-                          value={editDraft}
-                          onChange={e => setEditDraft(e.target.value)}
-                          onKeyDown={e => { if (e.key === "Enter") saveOverride(k); if (e.key === "Escape") { setEditingKidId(null); setEditDraft(""); } }}
-                        />
-                        <button onClick={() => saveOverride(k)} disabled={saving[k.id]}
-                          style={btnPrimary}
-                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold">
-                          {saving[k.id] ? "..." : "Save"}
-                        </button>
-                        <button onClick={() => { setEditingKidId(null); setEditDraft(""); }}
-                          style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
-                          className="px-2.5 py-1.5 rounded-lg text-xs hover:text-white transition-all">
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-right">
-                          <div className="flex items-center gap-1.5 justify-end">
-                            <span className="text-white text-sm font-semibold">
-                              LKR {(displayAmt || 0).toLocaleString()}
-                            </span>
-                            {isManual && (
-                              <span style={{ backgroundColor: "rgba(251,191,36,0.15)", color: "#FCD34D", border: "1px solid rgba(251,191,36,0.3)" }}
-                                className="text-xs px-1.5 py-0.5 rounded-full font-semibold">
-                                custom
+                    {/* Amount — col-span-3 */}
+                    <div className="col-span-3 flex items-center justify-end gap-1">
+                      {isEditing ? (
+                        <div className="flex items-center gap-1">
+                          <span className="text-gray-500 text-xs">LKR</span>
+                          <input style={input} type="number" autoFocus
+                            className="w-16 rounded-lg p-1 text-xs focus:outline-none"
+                            value={editDraft}
+                            onChange={e => setEditDraft(e.target.value)}
+                            onKeyDown={e => { if (e.key === "Enter") saveOverride(k); if (e.key === "Escape") { setEditingKidId(null); setEditDraft(""); } }}
+                          />
+                          <button onClick={() => saveOverride(k)} disabled={saving[k.id]}
+                            style={btnPrimary} className="px-2 py-1 rounded-lg text-xs font-semibold">
+                            {saving[k.id] ? "..." : "✓"}
+                          </button>
+                          <button onClick={() => { setEditingKidId(null); setEditDraft(""); }}
+                            style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
+                            className="px-2 py-1 rounded-lg text-xs">✕</button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 justify-end">
+                          <div className="text-right">
+                            <div className="flex items-center gap-1 justify-end">
+                              <span className="text-white text-xs font-semibold">
+                                LKR {(displayAmt || 0).toLocaleString()}
                               </span>
+                              {isManual && (
+                                <span style={{ backgroundColor: "rgba(251,191,36,0.15)", color: "#FCD34D", border: "1px solid rgba(251,191,36,0.3)" }}
+                                  className="text-xs px-1 py-0.5 rounded-full font-semibold">
+                                  custom
+                                </span>
+                              )}
+                            </div>
+                            {isManual && (
+                              <p className="text-gray-600 text-xs text-right">
+                                calc: {(k.calculated_amount || 0).toLocaleString()}
+                              </p>
                             )}
                           </div>
+                          <button onClick={() => { setEditingKidId(k.id); setEditDraft(String(displayAmt || "")); }}
+                            style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                            className="p-1 rounded-lg hover:text-white transition-all flex-shrink-0"
+                            title="Override amount">
+                            <Pencil size={11} />
+                          </button>
                           {isManual && (
-                            <p className="text-gray-600 text-xs mt-0.5 text-right">
-                              calc: LKR {(k.calculated_amount || 0).toLocaleString()}
-                            </p>
+                            <button onClick={() => resetOverride(k)} disabled={saving[k.id]}
+                              style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                              className="p-1 rounded-lg hover:text-cyan-400 transition-all flex-shrink-0"
+                              title="Reset to calculated rate">
+                              <RefreshCw size={11} />
+                            </button>
                           )}
                         </div>
+                      )}
+                    </div>
 
-                        {/* Edit override button */}
-                        <button
-                          onClick={() => { setEditingKidId(k.id); setEditDraft(String(displayAmt || "")); }}
-                          style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
-                          className="p-1.5 rounded-lg hover:text-white hover:border-white/20 transition-all flex-shrink-0"
-                          title="Override amount">
-                          <Pencil size={12} />
-                        </button>
-
-                        {/* Reset to calculated (only shown when manually overridden) */}
-                        {isManual && (
-                          <button
-                            onClick={() => resetOverride(k)}
-                            disabled={saving[k.id]}
-                            style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
-                            className="p-1.5 rounded-lg hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex-shrink-0"
-                            title="Reset to calculated rate">
-                            <RefreshCw size={12} />
-                          </button>
-                        )}
-                      </>
-                    )}
+                    {/* Status — col-span-3 */}
+                    <div className="col-span-3 flex justify-end">
+                      <StatusPill
+                        status={status}
+                        saving={saving[k.id]}
+                        disabled={isEditing}
+                        onClick={() => toggleStatus(k)}
+                      />
+                    </div>
                   </div>
-
-                  {/* Status pill — always independent of edit mode */}
-                  <StatusPill
-                    status={status}
-                    saving={saving[k.id]}
-                    disabled={isEditing}
-                    onClick={() => toggleStatus(k)}
-                  />
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 

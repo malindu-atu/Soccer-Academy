@@ -114,11 +114,11 @@ def get_payments(
         k["calculated_amount"] = calculated_amount
 
         existing = payment_map.get(k["id"])
-        if existing and existing.get("is_manual_amount"):
-            payment_map[k["id"]]["display_amount"] = existing["amount"]
+        if existing:
+            display = existing["amount"] if existing.get("is_manual_amount") else calculated_amount
+            payment_map[k["id"]]["display_amount"] = display
         else:
-            payment_map[k["id"]] = payment_map.get(k["id"], {})
-            payment_map[k["id"]]["display_amount"] = calculated_amount
+            payment_map[k["id"]] = {"display_amount": calculated_amount}
 
     return {"kids": kids, "payment_map": payment_map}
 
