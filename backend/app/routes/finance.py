@@ -72,7 +72,7 @@ def get_payments(
     if age_group:
         kids_query = kids_query.eq("age_group", age_group)
     if search:
-        kids_query = kids_query.ilike("name", f"%{search}%")
+        kids_query = kids_query.filter("name", "ilike", f"%{search}%")
     kids_res = kids_query.execute()
     kids = kids_res.data
 
