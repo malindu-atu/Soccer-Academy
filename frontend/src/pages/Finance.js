@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, Plus, Trash2, X,
   TrendingUp, TrendingDown, DollarSign, MapPin,
-  Users, Loader2, Check, AlertCircle
+  Users, Loader2, Check, AlertCircle, Pencil, RefreshCw
 } from "lucide-react";
 import { pageWrapper, card, input, btnPrimary, btnOutline } from "../components/UI";
 import StudentFilter from "../components/StudentFilter";
@@ -15,36 +15,65 @@ api.interceptors.request.use(c => {
   return c;
 });
 
-const getLocations       = ()      => api.get("/locations/");
-const getCoaches         = ()      => api.get("/coaches/");
-const getSummary         = (m)     => api.get(`/finance/summary/${m}`);
-const getRates           = ()      => api.get("/finance/rates");
-const updateRate         = (ag, d) => api.put(`/finance/rates/${ag}`, d);
+const getLocations       = ()           => api.get("/locations/");
+const getCoaches         = ()           => api.get("/coaches/");
+const getSummary         = (m)          => api.get(`/finance/summary/${m}`);
+const getRates           = ()           => api.get("/finance/rates");
+const updateRate         = (ag, d)      => api.put(`/finance/rates/${ag}`, d);
 const getPayments        = (m, params = {}) => api.get(`/finance/payments?month=${m}`, { params });
-const getPaymentSummary  = (m, l)  => api.get(`/finance/payments/summary/${m}${l ? `?location_id=${l}` : ""}`);
-const upsertPayment      = (d)     => api.post("/finance/payments", d);
-const getOtherIncome     = (m)     => api.get(`/finance/other-income?month=${m}`);
-const createOtherIncome  = (d)     => api.post("/finance/other-income", d);
-const deleteOtherIncome  = (id)    => api.delete(`/finance/other-income/${id}`);
-const getExpenses        = (m)     => api.get(`/finance/expenses?month=${m}`);
-const createExpense      = (d)     => api.post("/finance/expenses", d);
-const deleteExpense      = (id)    => api.delete(`/finance/expenses/${id}`);
-const getSalaries        = (m)     => api.get(`/finance/salaries?month=${m}`);
-const createSalary       = (d)     => api.post("/finance/salaries", d);
-const deleteSalary       = (id)    => api.delete(`/finance/salaries/${id}`);
+const upsertPayment      = (d)          => api.post("/finance/payments", d);
+const getOtherIncome     = (m)          => api.get(`/finance/other-income?month=${m}`);
+const createOtherIncome  = (d)          => api.post("/finance/other-income", d);
+const deleteOtherIncome  = (id)         => api.delete(`/finance/other-income/${id}`);
+const getExpenses        = (m)          => api.get(`/finance/expenses?month=${m}`);
+const createExpense      = (d)          => api.post("/finance/expenses", d);
+const deleteExpense      = (id)         => api.delete(`/finance/expenses/${id}`);
+const getSalaries        = (m)          => api.get(`/finance/salaries?month=${m}`);
+const createSalary       = (d)          => api.post("/finance/salaries", d);
+const deleteSalary       = (id)         => api.delete(`/finance/salaries/${id}`);
 
-const AGE_GROUP_LABELS = { U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls" };
+const AGE_GROUP_LABELS = {
+  U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls",
+};
+
+const OTHER_INCOME_LABELS = {
+  fbl_private_events:    "FBL Private Events",
+  montessori_payments:   "Montessori Payments",
+  kit_payments:          "Kit Payments",
+  registration_payments: "Registration Payments",
+  sponsors:              "Sponsors",
+  other_payments:        "Other Payments",
+  academy_events:        "Academy Events",
+  tournament_payments:   "Tournament Payments",
+};
+
+const OTHER_INCOME_OPTIONS = [
+  { value: "fbl_private_events",    label: "FBL Private Events" },
+  { value: "montessori_payments",   label: "Montessori Payments" },
+  { value: "kit_payments",          label: "Kit Payments" },
+  { value: "registration_payments", label: "Registration Payments" },
+  { value: "sponsors",              label: "Sponsors" },
+  { value: "other_payments",        label: "Other Payments" },
+  { value: "academy_events",        label: "Academy Events" },
+  { value: "tournament_payments",   label: "Tournament Payments" },
+];
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function toMonthStr(d) {
-  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 function formatMonth(m) {
   const [y, mo] = m.split("-");
-  return new Date(y, mo-1).toLocaleString("default", { month: "long", year: "numeric" });
+  return new Date(y, mo - 1).toLocaleString("default", { month: "long", year: "numeric" });
 }
 function fmt(n) {
   return `LKR ${(n || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function formatDate(str) {
+  if (!str) return "—";
+  const d = new Date(str);
+  if (isNaN(d)) return "—";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 const STATUS_CFG = {
@@ -85,12 +114,12 @@ function MonthNav({ month, onChange }) {
 }
 
 // ── Status pill ───────────────────────────────────────────────────────────────
-function StatusPill({ status, onClick, saving }) {
+function StatusPill({ status, onClick, saving, disabled }) {
   const cfg = STATUS_CFG[status] || STATUS_CFG.unpaid;
   return (
-    <button onClick={onClick} disabled={saving}
+    <button onClick={onClick} disabled={saving || disabled}
       style={{ backgroundColor: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}40`, minWidth: 80 }}
-      className="px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 flex items-center gap-1.5 justify-center">
+      className="px-3 py-1 rounded-full text-xs font-semibold transition-all hover:opacity-80 flex items-center gap-1.5 justify-center disabled:opacity-50">
       <span>{cfg.icon}</span>
       {saving ? "..." : cfg.label}
     </button>
@@ -107,7 +136,7 @@ function SummaryCards({ summary }) {
         { label: "Total Income",   value: fmt(summary.total_income),   color: "#00E5CC", icon: TrendingUp   },
         { label: "Student Fees",   value: fmt(summary.student_income), color: "#4DFFD2", icon: Users        },
         { label: "Total Expenses", value: fmt(summary.total_expenses), color: "#F87171", icon: TrendingDown },
-        { label: "Net",            value: fmt(net),                    color: net >= 0 ? "#00E5CC" : "#F87171", icon: DollarSign },
+        { label: "Net",            value: fmt(net), color: net >= 0 ? "#00E5CC" : "#F87171", icon: DollarSign },
       ].map(s => {
         const Icon = s.icon;
         return (
@@ -124,13 +153,11 @@ function SummaryCards({ summary }) {
   );
 }
 
-// ── Income tab ────────────────────────────────────────────────────────────────
-
 // ── Rates drawer ──────────────────────────────────────────────────────────────
 function RatesDrawer({ onClose }) {
-  const [rates, setRates] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState({});
+  const [rates, setRates]           = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [saving, setSaving]         = useState({});
   const [editValues, setEditValues] = useState({});
 
   useEffect(() => {
@@ -161,19 +188,23 @@ function RatesDrawer({ onClose }) {
           <button onClick={onClose} className="text-gray-500 hover:text-white"><X size={18} /></button>
         </div>
         {loading ? (
-          <div className="flex justify-center py-8"><Loader2 size={16} className="animate-spin text-gray-500" /></div>
+          <div className="flex justify-center py-8">
+            <Loader2 size={16} className="animate-spin text-gray-500" />
+          </div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {rates.map(r => (
               <div key={r.age_group} className="flex items-center gap-2">
                 <span style={{ backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }}
-                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold w-20 text-center">{AGE_GROUP_LABELS[r.age_group] || r.age_group}</span>
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold w-32 text-center flex-shrink-0">
+                  {AGE_GROUP_LABELS[r.age_group] || r.age_group}
+                </span>
                 <input style={input} type="number"
                   className="flex-1 rounded-lg p-2 text-sm focus:outline-none"
                   value={editValues[r.age_group] ?? ""}
                   onChange={e => setEditValues(v => ({ ...v, [r.age_group]: e.target.value }))} />
                 <button onClick={() => save(r.age_group)} disabled={saving[r.age_group]}
-                  style={btnPrimary} className="px-3 py-2 rounded-lg text-xs font-semibold">
+                  style={btnPrimary} className="px-3 py-2 rounded-lg text-xs font-semibold flex-shrink-0">
                   {saving[r.age_group] ? "..." : "Save"}
                 </button>
               </div>
@@ -185,33 +216,33 @@ function RatesDrawer({ onClose }) {
   );
 }
 
-// ── Income feed (students + other income, filterable) ─────────────────────────
-function IncomeFeed({ month, studentPayments, otherIncome, refreshKey }) {
-  const [typeFilter, setTypeFilter] = useState(""); // "" | "student" | "other"
+// ── Income feed ───────────────────────────────────────────────────────────────
+function IncomeFeed({ studentPayments, otherIncome }) {
+  const [typeFilter, setTypeFilter] = useState("");
 
   const studentEntries = studentPayments
     .filter(k => k.payment?.status === "paid")
     .map(k => ({
-      id: `student-${k.id}`,
-      type: "student",
-      title: k.name,
-      subtitle: `${k.age_group} · Student Fee`,
-      amount: k.payment.display_amount,
-      updated_at: k.payment.updated_at,
+      id:       `student-${k.id}`,
+      type:     "student",
+      title:    k.name,
+      subtitle: AGE_GROUP_LABELS[k.age_group] || k.age_group,
+      amount:   k.payment.display_amount ?? k.calculated_amount,
+      date:     k.payment.updated_at || null,
     }));
 
   const otherEntries = otherIncome.map(o => ({
-    id: `other-${o.id}`,
-    type: "other",
-    title: o.title,
-    subtitle: o.category,
-    amount: o.amount,
-    updated_at: o.created_at,
+    id:       `other-${o.id}`,
+    type:     "other",
+    title:    o.title,
+    subtitle: OTHER_INCOME_LABELS[o.category] || o.category,
+    amount:   o.amount,
+    date:     o.created_at || null,
   }));
 
   const combined = [...studentEntries, ...otherEntries]
     .filter(e => !typeFilter || e.type === typeFilter)
-    .sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""));
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   const total = combined.reduce((s, e) => s + (e.amount || 0), 0);
 
@@ -222,33 +253,46 @@ function IncomeFeed({ month, studentPayments, otherIncome, refreshKey }) {
           <p className="text-white font-semibold text-sm">Income This Month</p>
           <p className="text-gray-500 text-xs mt-0.5">{combined.length} entries</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span style={{ color: "#00E5CC" }} className="text-sm font-bold">{fmt(total)}</span>
           <select style={{ ...input, backgroundImage: "none" }}
             className="rounded-lg px-3 py-1.5 text-xs focus:outline-none"
             value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="" style={{ backgroundColor: "#0D1F3C" }}>All</option>
+            <option value=""        style={{ backgroundColor: "#0D1F3C" }}>All</option>
             <option value="student" style={{ backgroundColor: "#0D1F3C" }}>Student Fees</option>
-            <option value="other" style={{ backgroundColor: "#0D1F3C" }}>Other Income</option>
+            <option value="other"   style={{ backgroundColor: "#0D1F3C" }}>Other Income</option>
           </select>
         </div>
       </div>
+
       {combined.length === 0 ? (
         <p className="text-gray-600 text-sm text-center py-6">No income recorded yet this month</p>
       ) : (
-        <div className="space-y-2 max-h-72 overflow-y-auto">
+        <div className="max-h-72 overflow-y-auto">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-2 pb-2 mb-1"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="col-span-1 text-gray-600 text-xs">Type</p>
+            <p className="col-span-4 text-gray-600 text-xs">Name</p>
+            <p className="col-span-3 text-gray-600 text-xs">Category</p>
+            <p className="col-span-2 text-gray-600 text-xs">Date</p>
+            <p className="col-span-2 text-gray-600 text-xs text-right">Amount</p>
+          </div>
           {combined.map(e => (
-            <div key={e.id} className="flex items-center gap-3 py-2"
+            <div key={e.id} className="grid grid-cols-12 gap-2 py-2.5 items-center"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              <div style={e.type === "student"
-                  ? { backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }
-                  : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
-                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0 capitalize">{e.type === "student" ? "Fee" : "Other"}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-sm truncate">{e.title}</p>
-                <p className="text-gray-500 text-xs truncate">{e.subtitle}</p>
+              <div className="col-span-1">
+                <span style={e.type === "student"
+                    ? { backgroundColor: "rgba(0,229,204,0.1)", color: "#00E5CC" }
+                    : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
+                  className="px-1.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap">
+                  {e.type === "student" ? "Fee" : "Other"}
+                </span>
               </div>
-              <p style={{ color: "#00E5CC" }} className="text-sm font-semibold flex-shrink-0">{fmt(e.amount)}</p>
+              <p className="col-span-4 text-white text-sm truncate">{e.title}</p>
+              <p className="col-span-3 text-gray-500 text-xs truncate">{e.subtitle}</p>
+              <p className="col-span-2 text-gray-500 text-xs whitespace-nowrap">{formatDate(e.date)}</p>
+              <p className="col-span-2 text-right text-sm font-semibold" style={{ color: "#00E5CC" }}>{fmt(e.amount)}</p>
             </div>
           ))}
         </div>
@@ -259,19 +303,20 @@ function IncomeFeed({ month, studentPayments, otherIncome, refreshKey }) {
 
 // ── Income tab ────────────────────────────────────────────────────────────────
 function IncomeTab({ month }) {
-  const [locations, setLocations]     = useState([]);
-  const [selectedLoc, setSelectedLoc] = useState("");
-  const [ageFilter, setAgeFilter]     = useState("");
-  const [search, setSearch]           = useState("");
-  const [kids, setKids]               = useState([]);
-  const [paymentMap, setPaymentMap]   = useState({});
-  const [saving, setSaving]           = useState({});
-  const [amountDrafts, setAmountDrafts] = useState({});
-  const [otherIncome, setOtherIncome] = useState([]);
-  const [showOtherForm, setShowOther] = useState(false);
-  const [otherForm, setOtherForm]     = useState({ title: "", amount: "", category: "sponsor", notes: "" });
-  const [loading, setLoading]         = useState(false);
-  const [showRates, setShowRates]     = useState(false);
+  const [locations, setLocations]       = useState([]);
+  const [selectedLoc, setSelectedLoc]   = useState("");
+  const [ageFilter, setAgeFilter]       = useState("");
+  const [search, setSearch]             = useState("");
+  const [kids, setKids]                 = useState([]);
+  const [paymentMap, setPaymentMap]     = useState({});
+  const [saving, setSaving]             = useState({});
+  const [editingKidId, setEditingKidId] = useState(null);
+  const [editDraft, setEditDraft]       = useState("");
+  const [otherIncome, setOtherIncome]   = useState([]);
+  const [showOtherForm, setShowOther]   = useState(false);
+  const [otherForm, setOtherForm]       = useState({ title: "", amount: "", category: "sponsors", notes: "" });
+  const [loading, setLoading]           = useState(false);
+  const [showRates, setShowRates]       = useState(false);
 
   useEffect(() => {
     getLocations().then(r => setLocations(r.data)).catch(() => {});
@@ -282,8 +327,8 @@ function IncomeTab({ month }) {
     try {
       const params = {};
       if (selectedLoc) params.location_id = selectedLoc;
-      if (ageFilter) params.age_group = ageFilter;
-      if (search) params.search = search;
+      if (ageFilter)   params.age_group   = ageFilter;
+      if (search)      params.search      = search;
       const [pRes, oRes] = await Promise.all([
         getPayments(month, params),
         getOtherIncome(month),
@@ -297,36 +342,64 @@ function IncomeTab({ month }) {
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
 
+  // Toggle paid ↔ unpaid — uses stored/calculated amount, never opens edit mode
   const toggleStatus = async (kid) => {
-    const p = paymentMap[kid.id] || {};
-    const current = p.status || "unpaid";
-    const next = current === "unpaid" ? "paid" : "unpaid";
-    const amount = amountDrafts[kid.id] !== undefined ? parseFloat(amountDrafts[kid.id]) : (p.display_amount ?? kid.calculated_amount);
+    const p      = paymentMap[kid.id] || {};
+    const next   = (p.status || "unpaid") === "unpaid" ? "paid" : "unpaid";
+    const amount = p.is_manual_amount ? (p.amount ?? kid.calculated_amount) : kid.calculated_amount;
     setSaving(s => ({ ...s, [kid.id]: true }));
     try {
       const res = await upsertPayment({
         kid_id: kid.id, month, status: next,
         amount, note: p.note || null,
-        is_manual_amount: p.is_manual_amount || amountDrafts[kid.id] !== undefined,
+        is_manual_amount: p.is_manual_amount || false,
       });
-      setPaymentMap(m => ({ ...m, [kid.id]: { ...res, display_amount: res.amount } }));
+      setPaymentMap(m => ({
+        ...m,
+        [kid.id]: { ...res.data, display_amount: res.data.amount ?? kid.calculated_amount },
+      }));
     } catch (e) {}
     setSaving(s => ({ ...s, [kid.id]: false }));
   };
 
-  const saveAmount = async (kid) => {
-    const draft = amountDrafts[kid.id];
-    if (draft === undefined) return;
+  // Save a manually entered override amount
+  const saveOverride = async (kid) => {
     const p = paymentMap[kid.id] || {};
     setSaving(s => ({ ...s, [kid.id]: true }));
     try {
       const res = await upsertPayment({
-        kid_id: kid.id, month, status: p.status || "unpaid",
-        amount: parseFloat(draft) || 0, note: p.note || null,
+        kid_id: kid.id, month,
+        status: p.status || "unpaid",
+        amount: parseFloat(editDraft) || 0,
+        note:   p.note || null,
         is_manual_amount: true,
       });
-      setPaymentMap(m => ({ ...m, [kid.id]: { ...res, display_amount: res.amount } }));
-      setAmountDrafts(d => { const c = { ...d }; delete c[kid.id]; return c; });
+      setPaymentMap(m => ({
+        ...m,
+        [kid.id]: { ...res.data, display_amount: res.data.amount },
+      }));
+    } catch (e) {}
+    setSaving(s => ({ ...s, [kid.id]: false }));
+    setEditingKidId(null);
+    setEditDraft("");
+  };
+
+  // Reset override back to calculated amount
+  const resetOverride = async (kid) => {
+    const p = paymentMap[kid.id] || {};
+    setSaving(s => ({ ...s, [kid.id]: true }));
+    try {
+      const res = await upsertPayment({
+        kid_id: kid.id, month,
+        status: p.status || "unpaid",
+        amount: kid.calculated_amount,
+        note:   p.note || null,
+        is_manual_amount: false,
+      });
+      setPaymentMap(m => ({
+        ...m,
+        [kid.id]: { ...res.data, display_amount: kid.calculated_amount },
+      }));
     } catch (e) {}
     setSaving(s => ({ ...s, [kid.id]: false }));
   };
@@ -335,7 +408,7 @@ function IncomeTab({ month }) {
     if (!otherForm.title || !otherForm.amount) return;
     try {
       await createOtherIncome({ ...otherForm, amount: parseFloat(otherForm.amount), month });
-      setOtherForm({ title: "", amount: "", category: "sponsor", notes: "" });
+      setOtherForm({ title: "", amount: "", category: "sponsors", notes: "" });
       setShowOther(false);
       getOtherIncome(month).then(r => setOtherIncome(r.data));
     } catch (e) {}
@@ -346,11 +419,17 @@ function IncomeTab({ month }) {
     setOtherIncome(o => o.filter(x => x.id !== id));
   };
 
-  const kidsWithPayment = kids.map(k => ({ ...k, payment: paymentMap[k.id] || { display_amount: k.calculated_amount, status: "unpaid" } }));
+  const kidsWithPayment = kids.map(k => ({
+    ...k,
+    payment: paymentMap[k.id]
+      ? { ...paymentMap[k.id], display_amount: paymentMap[k.id].display_amount ?? k.calculated_amount }
+      : { display_amount: k.calculated_amount, status: "unpaid", is_manual_amount: false },
+  }));
 
   return (
     <div className="space-y-5">
-      {/* Filters + rates */}
+
+      {/* Student fees card */}
       <div style={card} className="rounded-2xl p-4">
         <div className="flex items-center justify-between mb-3">
           <p className="text-white font-semibold text-sm">Student Fees</p>
@@ -359,8 +438,9 @@ function IncomeTab({ month }) {
             Edit Rates
           </button>
         </div>
+
         <StudentFilter
-          search={search} onSearch={setSearch}
+          search={search}      onSearch={setSearch}
           ageFilter={ageFilter} onAge={setAgeFilter}
           locationFilter={selectedLoc} onLocation={setSelectedLoc}
           locations={locations}
@@ -376,35 +456,112 @@ function IncomeTab({ month }) {
             {kidsWithPayment.length === 0 && (
               <p className="text-gray-500 text-sm text-center py-6">No students found</p>
             )}
+
             {kidsWithPayment.map(k => {
-              const status = k.payment.status || "unpaid";
-              const draft = amountDrafts[k.id];
-              const displayAmount = draft !== undefined ? draft : (k.payment.display_amount ?? k.calculated_amount);
+              const status     = k.payment.status || "unpaid";
+              const isManual   = k.payment.is_manual_amount;
+              const displayAmt = k.payment.display_amount ?? k.calculated_amount;
+              const isEditing  = editingKidId === k.id;
+
               return (
-                <div key={k.id} className="flex items-center gap-3 py-3 flex-wrap">
+                <div key={k.id} className="flex items-center gap-3 py-3 flex-wrap"
+                  style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+
+                  {/* Avatar */}
                   <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
                     className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0">
                     {k.name.charAt(0)}
                   </div>
-                  <div className="flex-1 min-w-[140px]">
+
+                  {/* Name / meta */}
+                  <div className="flex-1 min-w-[120px]">
                     <p className="text-white text-sm font-medium">{k.name}</p>
                     <p className="text-gray-500 text-xs">
-                      {k.age_group}{k.locations?.name ? ` · ${k.locations.name}` : ""}
+                      {AGE_GROUP_LABELS[k.age_group] || k.age_group}
+                      {k.locations?.name ? ` · ${k.locations.name}` : ""}
                     </p>
                   </div>
-                  <div className="text-center px-3 flex-shrink-0">
+
+                  {/* Sessions attended */}
+                  <div className="text-center px-2 flex-shrink-0">
                     <p style={{ color: "#4DFFD2" }} className="text-sm font-bold">{k.sessions_attended}</p>
                     <p className="text-gray-600 text-xs">sessions</p>
                   </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <span className="text-gray-500 text-xs">LKR</span>
-                    <input style={input} type="number"
-                      className="w-24 rounded-lg p-1.5 text-sm focus:outline-none"
-                      value={displayAmount}
-                      onChange={e => setAmountDrafts(d => ({ ...d, [k.id]: e.target.value }))}
-                      onBlur={() => saveAmount(k)} />
+
+                  {/* Amount — read-only or edit mode */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isEditing ? (
+                      <>
+                        <span className="text-gray-500 text-xs">LKR</span>
+                        <input style={input} type="number" autoFocus
+                          className="w-24 rounded-lg p-1.5 text-sm focus:outline-none"
+                          value={editDraft}
+                          onChange={e => setEditDraft(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Enter") saveOverride(k); if (e.key === "Escape") { setEditingKidId(null); setEditDraft(""); } }}
+                        />
+                        <button onClick={() => saveOverride(k)} disabled={saving[k.id]}
+                          style={btnPrimary}
+                          className="px-2.5 py-1.5 rounded-lg text-xs font-semibold">
+                          {saving[k.id] ? "..." : "Save"}
+                        </button>
+                        <button onClick={() => { setEditingKidId(null); setEditDraft(""); }}
+                          style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.1)" }}
+                          className="px-2.5 py-1.5 rounded-lg text-xs hover:text-white transition-all">
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="text-right">
+                          <div className="flex items-center gap-1.5 justify-end">
+                            <span className="text-white text-sm font-semibold">
+                              LKR {(displayAmt || 0).toLocaleString()}
+                            </span>
+                            {isManual && (
+                              <span style={{ backgroundColor: "rgba(251,191,36,0.15)", color: "#FCD34D", border: "1px solid rgba(251,191,36,0.3)" }}
+                                className="text-xs px-1.5 py-0.5 rounded-full font-semibold">
+                                custom
+                              </span>
+                            )}
+                          </div>
+                          {isManual && (
+                            <p className="text-gray-600 text-xs mt-0.5 text-right">
+                              calc: LKR {(k.calculated_amount || 0).toLocaleString()}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Edit override button */}
+                        <button
+                          onClick={() => { setEditingKidId(k.id); setEditDraft(String(displayAmt || "")); }}
+                          style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                          className="p-1.5 rounded-lg hover:text-white hover:border-white/20 transition-all flex-shrink-0"
+                          title="Override amount">
+                          <Pencil size={12} />
+                        </button>
+
+                        {/* Reset to calculated (only shown when manually overridden) */}
+                        {isManual && (
+                          <button
+                            onClick={() => resetOverride(k)}
+                            disabled={saving[k.id]}
+                            style={{ color: "#9CA3AF", border: "1px solid rgba(255,255,255,0.08)" }}
+                            className="p-1.5 rounded-lg hover:text-cyan-400 hover:border-cyan-500/30 transition-all flex-shrink-0"
+                            title="Reset to calculated rate">
+                            <RefreshCw size={12} />
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
-                  <StatusPill status={status} saving={saving[k.id]} onClick={() => toggleStatus(k)} />
+
+                  {/* Status pill — always independent of edit mode */}
+                  <StatusPill
+                    status={status}
+                    saving={saving[k.id]}
+                    disabled={isEditing}
+                    onClick={() => toggleStatus(k)}
+                  />
                 </div>
               );
             })}
@@ -412,12 +569,12 @@ function IncomeTab({ month }) {
         )}
       </div>
 
-      {/* Other income */}
+      {/* Other income card */}
       <div style={card} className="rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
             <p className="text-white font-semibold text-sm">Other Income</p>
-            <p className="text-gray-500 text-xs mt-0.5">Sponsors, donations, and other sources</p>
+            <p className="text-gray-500 text-xs mt-0.5">Events, payments, and other sources</p>
           </div>
           <button onClick={() => setShowOther(f => !f)}
             style={showOtherForm ? btnOutline : btnPrimary}
@@ -433,7 +590,7 @@ function IncomeTab({ month }) {
               <div>
                 <label className="text-xs text-gray-400 mb-1 block">Title</label>
                 <input style={input} className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  placeholder="e.g. Sponsor payment" value={otherForm.title}
+                  placeholder="e.g. July tournament entry" value={otherForm.title}
                   onChange={e => setOtherForm(f => ({ ...f, title: e.target.value }))} />
               </div>
               <div>
@@ -447,9 +604,10 @@ function IncomeTab({ month }) {
               <label className="text-xs text-gray-400 mb-1 block">Category</label>
               <select style={{ ...input, backgroundImage: "none" }}
                 className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                value={otherForm.category} onChange={e => setOtherForm(f => ({ ...f, category: e.target.value }))}>
-                {["sponsor","donation","grant","other"].map(c => (
-                  <option key={c} value={c} style={{ backgroundColor: "#0D1F3C" }} className="capitalize">{c}</option>
+                value={otherForm.category}
+                onChange={e => setOtherForm(f => ({ ...f, category: e.target.value }))}>
+                {OTHER_INCOME_OPTIONS.map(c => (
+                  <option key={c.value} value={c.value} style={{ backgroundColor: "#0D1F3C" }}>{c.label}</option>
                 ))}
               </select>
             </div>
@@ -471,16 +629,20 @@ function IncomeTab({ month }) {
             <p className="text-gray-600 text-sm text-center py-4">No other income recorded this month</p>
           )}
           {otherIncome.map(o => (
-            <div key={o.id} className="flex items-center gap-3 group">
-              <div style={{ backgroundColor: "rgba(0,229,204,0.08)", color: "#00E5CC" }}
-                className="px-2 py-0.5 rounded-full text-xs capitalize flex-shrink-0">{o.category}</div>
+            <div key={o.id} className="flex items-center gap-3 py-2 group"
+              style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+              <div style={{ backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
+                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0 whitespace-nowrap">
+                {OTHER_INCOME_LABELS[o.category] || o.category}
+              </div>
               <div className="flex-1 min-w-0">
-                <p className="text-white text-sm">{o.title}</p>
+                <p className="text-white text-sm truncate">{o.title}</p>
                 {o.notes && <p className="text-gray-500 text-xs">{o.notes}</p>}
               </div>
+              <p className="text-gray-500 text-xs flex-shrink-0">{formatDate(o.created_at)}</p>
               <p style={{ color: "#00E5CC" }} className="text-sm font-semibold flex-shrink-0">{fmt(o.amount)}</p>
               <button onClick={() => handleDeleteOther(o.id)}
-                className="opacity-0 group-hover:opacity-100 transition-all text-red-400 hover:text-red-300">
+                className="opacity-0 group-hover:opacity-100 transition-all text-red-400 hover:text-red-300 flex-shrink-0">
                 <Trash2 size={13} />
               </button>
             </div>
@@ -488,31 +650,32 @@ function IncomeTab({ month }) {
         </div>
       </div>
 
-      {/* Bottom income feed */}
-      <IncomeFeed month={month} studentPayments={kidsWithPayment} otherIncome={otherIncome} />
+      {/* Income feed */}
+      <IncomeFeed studentPayments={kidsWithPayment} otherIncome={otherIncome} />
 
       {showRates && <RatesDrawer onClose={() => setShowRates(false)} />}
     </div>
   );
 }
 
-// ── Expenses tab ──────────────────────────────────────────────────────────────
-// ── Expense feed (expenses + salaries, filterable) ─────────────────────────────
+// ── Expense feed ──────────────────────────────────────────────────────────────
 function ExpenseFeed({ expenses, salaries }) {
-  const [typeFilter, setTypeFilter] = useState(""); // "" | "expense" | "salary"
+  const [typeFilter, setTypeFilter] = useState("");
 
   const expenseEntries = expenses.map(x => ({
-    id: `expense-${x.id}`, type: "expense", title: x.title,
-    subtitle: x.notes || "Expense", amount: x.amount, created_at: x.created_at,
+    id: `expense-${x.id}`, type: "expense",
+    title: x.title, subtitle: x.notes || "—",
+    amount: x.amount, date: x.created_at || null,
   }));
   const salaryEntries = salaries.map(x => ({
-    id: `salary-${x.id}`, type: "salary", title: x.coaches?.name || "Unknown Coach",
-    subtitle: x.notes || "Salary", amount: x.amount, created_at: x.created_at,
+    id: `salary-${x.id}`, type: "salary",
+    title: x.coaches?.name || "Unknown Coach", subtitle: x.notes || "—",
+    amount: x.amount, date: x.created_at || null,
   }));
 
   const combined = [...expenseEntries, ...salaryEntries]
     .filter(e => !typeFilter || e.type === typeFilter)
-    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+    .sort((a, b) => (b.date || "").localeCompare(a.date || ""));
 
   const total = combined.reduce((s, e) => s + (e.amount || 0), 0);
 
@@ -523,33 +686,46 @@ function ExpenseFeed({ expenses, salaries }) {
           <p className="text-white font-semibold text-sm">Expenses This Month</p>
           <p className="text-gray-500 text-xs mt-0.5">{combined.length} entries</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <span style={{ color: "#F87171" }} className="text-sm font-bold">{fmt(total)}</span>
           <select style={{ ...input, backgroundImage: "none" }}
             className="rounded-lg px-3 py-1.5 text-xs focus:outline-none"
             value={typeFilter} onChange={e => setTypeFilter(e.target.value)}>
-            <option value="" style={{ backgroundColor: "#0D1F3C" }}>All</option>
-            <option value="expense" style={{ backgroundColor: "#0D1F3C" }}>Expenses</option>
-            <option value="salary" style={{ backgroundColor: "#0D1F3C" }}>Salaries</option>
+            <option value=""         style={{ backgroundColor: "#0D1F3C" }}>All</option>
+            <option value="expense"  style={{ backgroundColor: "#0D1F3C" }}>Expenses</option>
+            <option value="salary"   style={{ backgroundColor: "#0D1F3C" }}>Salaries</option>
           </select>
         </div>
       </div>
+
       {combined.length === 0 ? (
         <p className="text-gray-600 text-sm text-center py-6">No expenses recorded yet this month</p>
       ) : (
-        <div className="space-y-2 max-h-72 overflow-y-auto">
+        <div className="max-h-72 overflow-y-auto">
+          {/* Header */}
+          <div className="grid grid-cols-12 gap-2 pb-2 mb-1"
+            style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <p className="col-span-1 text-gray-600 text-xs">Type</p>
+            <p className="col-span-4 text-gray-600 text-xs">Name</p>
+            <p className="col-span-3 text-gray-600 text-xs">Notes</p>
+            <p className="col-span-2 text-gray-600 text-xs">Date</p>
+            <p className="col-span-2 text-gray-600 text-xs text-right">Amount</p>
+          </div>
           {combined.map(e => (
-            <div key={e.id} className="flex items-center gap-3 py-2"
+            <div key={e.id} className="grid grid-cols-12 gap-2 py-2.5 items-center"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-              <div style={e.type === "expense"
-                  ? { backgroundColor: "rgba(251,191,36,0.1)", color: "#FCD34D" }
-                  : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
-                className="px-2 py-0.5 rounded-full text-xs flex-shrink-0 capitalize">{e.type === "expense" ? "Expense" : "Salary"}</div>
-              <div className="flex-1 min-w-0">
-                <p className="text-white text-sm truncate">{e.title}</p>
-                <p className="text-gray-500 text-xs truncate">{e.subtitle}</p>
+              <div className="col-span-1">
+                <span style={e.type === "expense"
+                    ? { backgroundColor: "rgba(251,191,36,0.1)", color: "#FCD34D" }
+                    : { backgroundColor: "rgba(167,139,250,0.1)", color: "#A78BFA" }}
+                  className="px-1.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap">
+                  {e.type === "expense" ? "Exp" : "Sal"}
+                </span>
               </div>
-              <p style={{ color: "#F87171" }} className="text-sm font-semibold flex-shrink-0">{fmt(e.amount)}</p>
+              <p className="col-span-4 text-white text-sm truncate">{e.title}</p>
+              <p className="col-span-3 text-gray-500 text-xs truncate">{e.subtitle}</p>
+              <p className="col-span-2 text-gray-500 text-xs whitespace-nowrap">{formatDate(e.date)}</p>
+              <p className="col-span-2 text-right text-sm font-semibold" style={{ color: "#F87171" }}>{fmt(e.amount)}</p>
             </div>
           ))}
         </div>
@@ -560,14 +736,14 @@ function ExpenseFeed({ expenses, salaries }) {
 
 // ── Expenses tab ──────────────────────────────────────────────────────────────
 function ExpensesTab({ month }) {
-  const [coaches, setCoaches]     = useState([]);
-  const [expenses, setExpenses]   = useState([]);
-  const [salaries, setSalaries]   = useState([]);
+  const [coaches, setCoaches]         = useState([]);
+  const [expenses, setExpenses]       = useState([]);
+  const [salaries, setSalaries]       = useState([]);
   const [showExpense, setShowExpense] = useState(false);
   const [showSalary, setShowSalary]   = useState(false);
-  const [expForm, setExpForm]     = useState({ title: "", amount: "", notes: "" });
-  const [salForm, setSalForm]     = useState({ coach_id: "", amount: "", notes: "" });
-  const [loading, setLoading]     = useState(false);
+  const [expForm, setExpForm]         = useState({ title: "", amount: "", notes: "" });
+  const [salForm, setSalForm]         = useState({ coach_id: "", amount: "", notes: "" });
+  const [loading, setLoading]         = useState(false);
 
   useEffect(() => {
     getCoaches().then(r => setCoaches(r.data)).catch(() => {});
@@ -576,10 +752,7 @@ function ExpensesTab({ month }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [eRes, sRes] = await Promise.all([
-        getExpenses(month),
-        getSalaries(month),
-      ]);
+      const [eRes, sRes] = await Promise.all([getExpenses(month), getSalaries(month)]);
       setExpenses(eRes.data);
       setSalaries(sRes.data);
     } catch (e) {}
@@ -614,6 +787,7 @@ function ExpensesTab({ month }) {
         <p className="text-white text-sm">{item.title || item.coaches?.name}</p>
         {item.notes && <p className="text-gray-500 text-xs">{item.notes}</p>}
       </div>
+      <p className="text-gray-500 text-xs flex-shrink-0">{formatDate(item.created_at)}</p>
       <p style={{ color: amountColor }} className="text-sm font-semibold flex-shrink-0">{fmt(item.amount)}</p>
       <button onClick={() => onDelete(item.id)}
         className="opacity-0 group-hover:opacity-100 transition-all text-red-400 hover:text-red-300 flex-shrink-0">
@@ -624,7 +798,8 @@ function ExpensesTab({ month }) {
 
   return (
     <div className="space-y-5">
-      {/* Total expenses summary */}
+
+      {/* Totals */}
       <div className="grid grid-cols-2 gap-3">
         {[
           { label: "Expenses", value: expenseTotal, color: "#FCD34D" },
@@ -637,7 +812,7 @@ function ExpensesTab({ month }) {
         ))}
       </div>
 
-      {/* Expenses */}
+      {/* Expenses section */}
       <div style={card} className="rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -645,7 +820,9 @@ function ExpensesTab({ month }) {
             <p className="text-gray-500 text-xs mt-0.5">All costs for this month</p>
           </div>
           <div className="flex items-center gap-3">
-            {expenseTotal > 0 && <span style={{ color: "#FCD34D" }} className="text-sm font-bold">{fmt(expenseTotal)}</span>}
+            {expenseTotal > 0 && (
+              <span style={{ color: "#FCD34D" }} className="text-sm font-bold">{fmt(expenseTotal)}</span>
+            )}
             <button onClick={() => setShowExpense(f => !f)}
               style={showExpense ? btnOutline : btnPrimary}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
@@ -685,7 +862,9 @@ function ExpensesTab({ month }) {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-gray-500" /></div>
+          <div className="flex justify-center py-4">
+            <Loader2 size={14} className="animate-spin text-gray-500" />
+          </div>
         ) : expenses.length === 0 ? (
           <p className="text-gray-600 text-sm text-center py-4">No expenses added this month</p>
         ) : (
@@ -698,7 +877,7 @@ function ExpensesTab({ month }) {
         )}
       </div>
 
-      {/* Salaries */}
+      {/* Salaries section */}
       <div style={card} className="rounded-2xl p-4">
         <div className="flex items-center justify-between mb-4">
           <div>
@@ -706,7 +885,9 @@ function ExpensesTab({ month }) {
             <p className="text-gray-500 text-xs mt-0.5">Coach payments for this month</p>
           </div>
           <div className="flex items-center gap-3">
-            {salaryTotal > 0 && <span style={{ color: "#A78BFA" }} className="text-sm font-bold">{fmt(salaryTotal)}</span>}
+            {salaryTotal > 0 && (
+              <span style={{ color: "#A78BFA" }} className="text-sm font-bold">{fmt(salaryTotal)}</span>
+            )}
             <button onClick={() => setShowSalary(f => !f)}
               style={showSalary ? btnOutline : btnPrimary}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all">
@@ -723,7 +904,8 @@ function ExpensesTab({ month }) {
                 <label className="text-xs text-gray-400 mb-1 block">Coach</label>
                 <select style={{ ...input, backgroundImage: "none" }}
                   className="w-full rounded-lg p-2.5 text-sm focus:outline-none"
-                  value={salForm.coach_id} onChange={e => setSalForm(f => ({ ...f, coach_id: e.target.value }))}>
+                  value={salForm.coach_id}
+                  onChange={e => setSalForm(f => ({ ...f, coach_id: e.target.value }))}>
                   <option value="" style={{ backgroundColor: "#0D1F3C" }}>Select coach...</option>
                   {coaches.map(c => (
                     <option key={c.id} value={c.id} style={{ backgroundColor: "#0D1F3C" }}>{c.name}</option>
@@ -751,7 +933,9 @@ function ExpensesTab({ month }) {
         )}
 
         {loading ? (
-          <div className="flex justify-center py-4"><Loader2 size={14} className="animate-spin text-gray-500" /></div>
+          <div className="flex justify-center py-4">
+            <Loader2 size={14} className="animate-spin text-gray-500" />
+          </div>
         ) : salaries.length === 0 ? (
           <p className="text-gray-600 text-sm text-center py-4">No salaries recorded this month</p>
         ) : (
@@ -766,7 +950,7 @@ function ExpensesTab({ month }) {
         )}
       </div>
 
-      {/* Bottom expense feed */}
+      {/* Expense feed */}
       <ExpenseFeed expenses={expenses} salaries={salaries} />
     </div>
   );
@@ -774,9 +958,9 @@ function ExpensesTab({ month }) {
 
 // ── Main Finance page ─────────────────────────────────────────────────────────
 export default function Finance() {
-  const today    = new Date();
-  const [month, setMonth]   = useState(toMonthStr(today));
-  const [tab, setTab]       = useState("income");
+  const today = new Date();
+  const [month, setMonth]     = useState(toMonthStr(today));
+  const [tab, setTab]         = useState("income");
   const [summary, setSummary] = useState(null);
 
   useEffect(() => {
@@ -795,7 +979,7 @@ export default function Finance() {
         <MonthNav month={month} onChange={setMonth} />
       </div>
 
-      {/* Monthly summary */}
+      {/* Summary cards */}
       <SummaryCards summary={summary} />
 
       {/* Net bar */}
@@ -807,13 +991,13 @@ export default function Finance() {
               {summary.net >= 0 ? "+" : ""}{fmt(summary.net)} net
             </span>
           </div>
-          <div style={{ backgroundColor: "rgba(255,255,255,0.06)" }} className="rounded-full h-2 relative overflow-hidden">
+          <div style={{ backgroundColor: "rgba(255,255,255,0.06)" }} className="rounded-full h-2 overflow-hidden">
             <div style={{
               width: summary.total_income > 0
                 ? `${Math.min((summary.total_income / (summary.total_income + summary.total_expenses)) * 100, 100)}%`
                 : "0%",
               backgroundColor: "#00E5CC",
-              transition: "width 0.6s ease"
+              transition: "width 0.6s ease",
             }} className="h-2 rounded-full" />
           </div>
           <div className="flex justify-between text-xs mt-1">
@@ -841,7 +1025,6 @@ export default function Finance() {
         ))}
       </div>
 
-      {/* Content */}
       {tab === "income"   && <IncomeTab   month={month} />}
       {tab === "expenses" && <ExpensesTab month={month} />}
     </div>
