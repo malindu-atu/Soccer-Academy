@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import axios from "axios";
 
+
 const api = axios.create({ baseURL: process.env.REACT_APP_API_URL || "http://localhost:8000/api" });
 api.interceptors.request.use(c => {
   const u = JSON.parse(localStorage.getItem("user"));
@@ -435,7 +436,87 @@ function NotificationsSection({ coachId }) {
     </div>
   );
 }
+function MySessionsSection({ coachId }) {
+  const [sessions, setSessions] = useState([]);
+  const [loading, setLoading]   = useState(true);
 
+  useEffect(() => {
+    if (!coachId) { setLoading(false); return; }
+    const api = axios.create({ baseURL: process.env.REACT_APP_API_URL || "http://localhost:8000/api" });
+    api.interceptors.request.use(c => {
+      const u = JSON.parse(localStorage.getItem("user"));
+      if (u?.access_token) c.headers.Authorization = `Bearer ${u.access_token}`;
+      return c;
+    });
+    Promise.all([
+      api.post("/sessions/generate-week"),
+      api.get("/sessions/this-week"),
+    ]).then(([, res]) => {
+      const mine = (res.data || []).filter(s => s.coach_id === coachId);
+      mine.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
+      setSessions(mine);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, [coachId]);
+
+  const statusColor = (s) => s.status === "completed"
+    ? { color: "#00E5CC", bg: "rgba(0,229,204,0.1)" }
+    : { color: "#FCD34D", bg: "rgba(251,191,36,0.1)" };
+
+  return (
+    <div style={card} className="rounded-2xl p-5 sm:p-6">
+      <div className="flex items-center gap-3 mb-5">
+        <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
+          className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0">
+          <Calendar size={17} />
+        </div>
+        <div>
+          <p className="text-white font-semibold">My Sessions This Week</p>
+          <p className="text-gray-500 text-xs mt-0.5">Sessions assigned to you</p>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center gap-2 text-gray-500 text-sm py-8">
+          <Loader2 size={14} className="animate-spin" style={{ color: "#00E5CC" }} />
+        </div>
+      ) : sessions.length === 0 ? (
+        <div style={{ backgroundColor: "#0A1628" }} className="rounded-xl p-8 text-center">
+          <Calendar size={24} className="mx-auto mb-2 text-gray-600" />
+          <p className="text-gray-500 text-sm">No sessions assigned to you this week</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {sessions.map(s => {
+            const sc = statusColor(s);
+            return (
+              <div key={s.id}
+                style={{ backgroundColor: "#0A1628", border: "1px solid rgba(255,255,255,0.06)" }}
+                className="rounded-xl p-3 flex items-center gap-3">
+                <div style={{ backgroundColor: sc.bg, color: sc.color }}
+                  className="px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0">
+                  {s.age_group}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-white text-sm font-medium">
+                    {new Date(s.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" })}
+                  </p>
+                  <p className="text-gray-500 text-xs">
+                    {s.start_time} – {s.end_time}
+                    {s.locations?.name ? ` · ${s.locations.name}` : ""}
+                  </p>
+                </div>
+                <span style={{ backgroundColor: sc.bg, color: sc.color }}
+                  className="text-xs px-2 py-0.5 rounded-full capitalize flex-shrink-0">
+                  {s.status}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 export default function CoachPortal() {
   const { user } = useAuth();
   const coachId  = user?.coach?.id;
@@ -460,9 +541,12 @@ export default function CoachPortal() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        <AvailabilitySection coachId={coachId} />
-        <NotificationsSection coachId={coachId} />
+      <div className="space-y-5">
+        <MySessionsSection coachId={coachId} />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <AvailabilitySection coachId={coachId} />
+          <NotificationsSection coachId={coachId} />
+        </div>
       </div>
     </div>
   );

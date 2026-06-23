@@ -71,10 +71,12 @@ def get_payments(
         kids_query = kids_query.eq("location_id", location_id)
     if age_group:
         kids_query = kids_query.eq("age_group", age_group)
-    if search:
-        kids_query = kids_query.filter("name", "ilike", f"%{search}%")
     kids_res = kids_query.execute()
     kids = kids_res.data
+
+    if search:
+        search_lower = search.lower()
+        kids = [k for k in kids if search_lower in k["name"].lower()]
 
     if not kids:
         return {"kids": [], "payment_map": {}}

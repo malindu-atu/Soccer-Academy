@@ -307,6 +307,7 @@ function IncomeTab({ month }) {
   const [selectedLoc, setSelectedLoc]   = useState("");
   const [ageFilter, setAgeFilter]       = useState("");
   const [search, setSearch]             = useState("");
+  const [searchInput, setSearchInput]   = useState("");
   const [kids, setKids]                 = useState([]);
   const [paymentMap, setPaymentMap]     = useState({});
   const [saving, setSaving]             = useState({});
@@ -319,8 +320,9 @@ function IncomeTab({ month }) {
   const [showRates, setShowRates]       = useState(false);
 
   useEffect(() => {
-    getLocations().then(r => setLocations(r.data)).catch(() => {});
-  }, []);
+    const timer = setTimeout(() => setSearch(searchInput), 400);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
@@ -440,7 +442,7 @@ function IncomeTab({ month }) {
         </div>
 
         <StudentFilter
-          search={search}      onSearch={setSearch}
+          search={searchInput} onSearch={setSearchInput}
           ageFilter={ageFilter} onAge={setAgeFilter}
           locationFilter={selectedLoc} onLocation={setSelectedLoc}
           locations={locations}

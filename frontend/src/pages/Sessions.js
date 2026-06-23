@@ -91,7 +91,7 @@ function SessionRow({ t, coaches, onAssignCoach, onDelete, onManageStudents }) {
 function LocationTile({ loc, coaches, allKids, onRefresh, onDelete }) {
   const [expanded, setExpanded] = useState(false);
   const [showAddSession, setShowAddSession] = useState(false);
-  const [form, setForm] = useState({ day_of_week: "Monday", start_time: "", end_time: "", age_group: "U6", coach_id: "" });
+  const [form, setForm] = useState({ day_of_week: "Monday", start_time: "", end_time: "", age_group: "U7", coach_id: "" });
   const [enrollTarget, setEnrollTarget] = useState(null);
   const [selectedKids, setSelectedKids] = useState([]);
 
@@ -101,7 +101,7 @@ function LocationTile({ loc, coaches, allKids, onRefresh, onDelete }) {
   const handleAddSession = async (e) => {
     e.preventDefault();
     await createTemplate({ ...form, location_id: loc.id, coach_id: form.coach_id || null });
-    setForm({ day_of_week: "Monday", start_time: "", end_time: "", age_group: "U6", coach_id: "" });
+    setForm({ day_of_week: "Monday", start_time: "", end_time: "", age_group: "U7", coach_id: "" });
     setShowAddSession(false);
     onRefresh();
   };
@@ -119,7 +119,17 @@ function LocationTile({ loc, coaches, allKids, onRefresh, onDelete }) {
 
   const openEnroll = (t) => {
     setEnrollTarget(t);
-    setSelectedKids(t.session_enrollments?.map(e => e.kid_id) || []);
+    const existing = t.session_enrollments?.map(e => e.kid_id) || [];
+    if (existing.length > 0) {
+      // Use saved enrollments
+      setSelectedKids(existing);
+    } else {
+      // Auto-select all kids at this location with matching age group
+      const autoSelected = allKids
+        .filter(k => k.age_group === t.age_group && k.location_id === loc.id)
+        .map(k => k.id);
+      setSelectedKids(autoSelected);
+    }
   };
 
   const saveEnroll = async () => {
@@ -131,7 +141,7 @@ function LocationTile({ loc, coaches, allKids, onRefresh, onDelete }) {
   const toggleKid = (id) => setSelectedKids(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
 
   const eligibleKids = enrollTarget
-    ? allKids.filter(k => k.age_group === enrollTarget.age_group)
+    ? allKids.filter(k => k.age_group === enrollTarget.age_group && k.location_id === loc.id)
     : [];
 
   // Sort templates by day order
