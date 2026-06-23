@@ -4,7 +4,7 @@ import { useAuth } from "../context/AuthContext";
 import { pageWrapper, card, input, btnPrimary } from "../components/UI";
 import {
   Check, Clock, ChevronLeft, ChevronRight,
-  CheckCircle2, Loader2, Bell, BellOff, AlertCircle
+  CheckCircle2, Loader2, Bell, BellOff, AlertCircle, Calendar
 } from "lucide-react";
 import axios from "axios";
 
@@ -452,6 +452,8 @@ function MySessionsSection({ coachId }) {
       api.post("/sessions/generate-week"),
       api.get("/sessions/this-week"),
     ]).then(([, res]) => {
+      console.log("coachId:", coachId);
+      console.log("all sessions:", res.data?.map(s => ({ id: s.id, coach_id: s.coach_id, date: s.date })));
       const mine = (res.data || []).filter(s => s.coach_id === coachId);
       mine.sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
       setSessions(mine);
