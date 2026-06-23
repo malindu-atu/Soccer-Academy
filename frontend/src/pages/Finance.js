@@ -15,22 +15,22 @@ api.interceptors.request.use(c => {
   return c;
 });
 
-const getLocations       = ()           => api.get("/locations/");
-const getCoaches         = ()           => api.get("/coaches/");
-const getSummary         = (m)          => api.get(`/finance/summary/${m}`);
-const getRates           = ()           => api.get("/finance/rates");
-const updateRate         = (ag, d)      => api.put(`/finance/rates/${ag}`, d);
+const getLocations       = ()               => api.get("/locations/");
+const getCoaches         = ()               => api.get("/coaches/");
+const getSummary         = (m)              => api.get(`/finance/summary/${m}`);
+const getRates           = ()               => api.get("/finance/rates");
+const updateRate         = (ag, d)          => api.put(`/finance/rates/${ag}`, d);
 const getPayments        = (m, params = {}) => api.get(`/finance/payments?month=${m}`, { params });
-const upsertPayment      = (d)          => api.post("/finance/payments", d);
-const getOtherIncome     = (m)          => api.get(`/finance/other-income?month=${m}`);
-const createOtherIncome  = (d)          => api.post("/finance/other-income", d);
-const deleteOtherIncome  = (id)         => api.delete(`/finance/other-income/${id}`);
-const getExpenses        = (m)          => api.get(`/finance/expenses?month=${m}`);
-const createExpense      = (d)          => api.post("/finance/expenses", d);
-const deleteExpense      = (id)         => api.delete(`/finance/expenses/${id}`);
-const getSalaries        = (m)          => api.get(`/finance/salaries?month=${m}`);
-const createSalary       = (d)          => api.post("/finance/salaries", d);
-const deleteSalary       = (id)         => api.delete(`/finance/salaries/${id}`);
+const upsertPayment      = (d)              => api.post("/finance/payments", d);
+const getOtherIncome     = (m)              => api.get(`/finance/other-income?month=${m}`);
+const createOtherIncome  = (d)              => api.post("/finance/other-income", d);
+const deleteOtherIncome  = (id)             => api.delete(`/finance/other-income/${id}`);
+const getExpenses        = (m)              => api.get(`/finance/expenses?month=${m}`);
+const createExpense      = (d)              => api.post("/finance/expenses", d);
+const deleteExpense      = (id)             => api.delete(`/finance/expenses/${id}`);
+const getSalaries        = (m)              => api.get(`/finance/salaries?month=${m}`);
+const createSalary       = (d)              => api.post("/finance/salaries", d);
+const deleteSalary       = (id)             => api.delete(`/finance/salaries/${id}`);
 
 const AGE_GROUP_LABELS = {
   U7: "U7", U13: "U13", U12_DEV: "U12 Development", U13_GIRLS: "U13 Girls",
@@ -269,7 +269,6 @@ function IncomeFeed({ studentPayments, otherIncome }) {
         <p className="text-gray-600 text-sm text-center py-6">No income recorded yet this month</p>
       ) : (
         <div className="max-h-72 overflow-y-auto">
-          {/* Header */}
           <div className="grid grid-cols-12 gap-2 pb-2 mb-1"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="col-span-1 text-gray-600 text-xs">Type</p>
@@ -308,6 +307,7 @@ function IncomeTab({ month }) {
   const [ageFilter, setAgeFilter]       = useState("");
   const [search, setSearch]             = useState("");
   const [searchInput, setSearchInput]   = useState("");
+  const [paidFilter, setPaidFilter]     = useState("");
   const [kids, setKids]                 = useState([]);
   const [paymentMap, setPaymentMap]     = useState({});
   const [saving, setSaving]             = useState({});
@@ -318,6 +318,12 @@ function IncomeTab({ month }) {
   const [otherForm, setOtherForm]       = useState({ title: "", amount: "", category: "sponsors", notes: "" });
   const [loading, setLoading]           = useState(false);
   const [showRates, setShowRates]       = useState(false);
+
+  useEffect(() => {
+    getLocations().then(r => {
+      setLocations(r.data.map(l => ({ id: l.id, name: l.name })));
+    }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setSearch(searchInput), 400);
@@ -344,7 +350,6 @@ function IncomeTab({ month }) {
 
   useEffect(() => { loadPayments(); }, [loadPayments]);
 
-  // Toggle paid ↔ unpaid — uses stored/calculated amount, never opens edit mode
   const toggleStatus = async (kid) => {
     const p      = paymentMap[kid.id] || {};
     const next   = (p.status || "unpaid") === "unpaid" ? "paid" : "unpaid";
@@ -364,7 +369,6 @@ function IncomeTab({ month }) {
     setSaving(s => ({ ...s, [kid.id]: false }));
   };
 
-  // Save a manually entered override amount
   const saveOverride = async (kid) => {
     const p = paymentMap[kid.id] || {};
     setSaving(s => ({ ...s, [kid.id]: true }));
@@ -386,7 +390,6 @@ function IncomeTab({ month }) {
     setEditDraft("");
   };
 
-  // Reset override back to calculated amount
   const resetOverride = async (kid) => {
     const p = paymentMap[kid.id] || {};
     setSaving(s => ({ ...s, [kid.id]: true }));
@@ -421,12 +424,17 @@ function IncomeTab({ month }) {
     setOtherIncome(o => o.filter(x => x.id !== id));
   };
 
-  const kidsWithPayment = kids.map(k => ({
+  // All kids with payment info attached
+  const allKidsWithPayment = kids.map(k => ({
     ...k,
     payment: paymentMap[k.id]
       ? { ...paymentMap[k.id], display_amount: paymentMap[k.id].display_amount ?? k.calculated_amount }
       : { display_amount: k.calculated_amount, status: "unpaid", is_manual_amount: false },
   }));
+
+  // Further filtered by paid/unpaid pill
+  const kidsWithPayment = allKidsWithPayment
+    .filter(k => !paidFilter || (k.payment.status || "unpaid") === paidFilter);
 
   return (
     <div className="space-y-5">
@@ -441,21 +449,52 @@ function IncomeTab({ month }) {
           </button>
         </div>
 
+        {/* Name / age / location filters */}
         <StudentFilter
           search={searchInput} onSearch={setSearchInput}
-          ageFilter={ageFilter} onAge={setAgeFilter}
-          locationFilter={selectedLoc} onLocation={setSelectedLoc}
+          ageFilter={ageFilter} onAge={v => { setAgeFilter(v); setPaidFilter(""); }}
+          locationFilter={selectedLoc} onLocation={v => { setSelectedLoc(v); setPaidFilter(""); }}
           locations={locations}
-          resultCount={kids.length}
+          resultCount={kidsWithPayment.length}
         />
 
-{loading ? (
+        {/* Paid / Unpaid filter pills */}
+        <div className="flex items-center gap-2 mt-3 flex-wrap">
+          <span className="text-gray-500 text-xs">Status:</span>
+          {[
+            { value: "",       label: "All",    color: "#9CA3AF", activeBg: "rgba(255,255,255,0.08)" },
+            { value: "paid",   label: "Paid",   color: "#00E5CC", activeBg: "rgba(0,229,204,0.12)"  },
+            { value: "unpaid", label: "Unpaid", color: "#F87171", activeBg: "rgba(239,68,68,0.12)"  },
+          ].map(opt => {
+            const count = opt.value === ""
+              ? allKidsWithPayment.length
+              : allKidsWithPayment.filter(k => (k.payment.status || "unpaid") === opt.value).length;
+            const active = paidFilter === opt.value;
+            return (
+              <button key={opt.value} onClick={() => setPaidFilter(opt.value)}
+                style={active
+                  ? { backgroundColor: opt.activeBg, color: opt.color, border: `1px solid ${opt.color}50` }
+                  : { backgroundColor: "transparent", color: "#6B7280", border: "1px solid rgba(255,255,255,0.08)" }}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all">
+                {opt.label}
+                <span style={active
+                    ? { backgroundColor: opt.color, color: "#0A1628" }
+                    : { backgroundColor: "rgba(255,255,255,0.08)", color: "#6B7280" }}
+                  className="px-1.5 py-0.5 rounded-full text-xs font-bold">
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {loading ? (
           <div className="flex items-center justify-center gap-2 text-gray-500 text-sm py-8">
             <Loader2 size={14} className="animate-spin" style={{ color: "#00E5CC" }} /> Loading...
           </div>
         ) : (
           <>
-            {/* Sticky column header */}
+            {/* Column header */}
             <div className="grid grid-cols-12 gap-2 mt-4 pb-2"
               style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
               <p className="col-span-4 text-gray-600 text-xs">Student</p>
@@ -479,7 +518,7 @@ function IncomeTab({ month }) {
                   <div key={k.id} className="grid grid-cols-12 gap-2 py-2.5 items-center"
                     style={{ borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
 
-                    {/* Avatar + Name — col-span-4 */}
+                    {/* Avatar + Name */}
                     <div className="col-span-4 flex items-center gap-2 min-w-0">
                       <div style={{ backgroundColor: "rgba(0,229,204,0.15)", color: "#00E5CC" }}
                         className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0">
@@ -494,13 +533,13 @@ function IncomeTab({ month }) {
                       </div>
                     </div>
 
-                    {/* Sessions — col-span-2 */}
+                    {/* Sessions */}
                     <div className="col-span-2 text-center">
                       <p style={{ color: "#4DFFD2" }} className="text-sm font-bold">{k.sessions_attended}</p>
                       <p className="text-gray-600 text-xs">sessions</p>
                     </div>
 
-                    {/* Amount — col-span-3 */}
+                    {/* Amount */}
                     <div className="col-span-3 flex items-center justify-end gap-1">
                       {isEditing ? (
                         <div className="flex items-center gap-1">
@@ -509,7 +548,10 @@ function IncomeTab({ month }) {
                             className="w-16 rounded-lg p-1 text-xs focus:outline-none"
                             value={editDraft}
                             onChange={e => setEditDraft(e.target.value)}
-                            onKeyDown={e => { if (e.key === "Enter") saveOverride(k); if (e.key === "Escape") { setEditingKidId(null); setEditDraft(""); } }}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") saveOverride(k);
+                              if (e.key === "Escape") { setEditingKidId(null); setEditDraft(""); }
+                            }}
                           />
                           <button onClick={() => saveOverride(k)} disabled={saving[k.id]}
                             style={btnPrimary} className="px-2 py-1 rounded-lg text-xs font-semibold">
@@ -557,7 +599,7 @@ function IncomeTab({ month }) {
                       )}
                     </div>
 
-                    {/* Status — col-span-3 */}
+                    {/* Status pill */}
                     <div className="col-span-3 flex justify-end">
                       <StatusPill
                         status={status}
@@ -655,8 +697,8 @@ function IncomeTab({ month }) {
         </div>
       </div>
 
-      {/* Income feed */}
-      <IncomeFeed studentPayments={kidsWithPayment} otherIncome={otherIncome} />
+      {/* Income feed — always uses allKidsWithPayment so paid list is unaffected by pills */}
+      <IncomeFeed studentPayments={allKidsWithPayment} otherIncome={otherIncome} />
 
       {showRates && <RatesDrawer onClose={() => setShowRates(false)} />}
     </div>
@@ -707,7 +749,6 @@ function ExpenseFeed({ expenses, salaries }) {
         <p className="text-gray-600 text-sm text-center py-6">No expenses recorded yet this month</p>
       ) : (
         <div className="max-h-72 overflow-y-auto">
-          {/* Header */}
           <div className="grid grid-cols-12 gap-2 pb-2 mb-1"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
             <p className="col-span-1 text-gray-600 text-xs">Type</p>
